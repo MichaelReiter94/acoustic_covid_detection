@@ -6,17 +6,37 @@ import librosa.display
 import matplotlib.pyplot as plt
 
 
+
 class AudioRecording:
 
 
-    def __init__(self, file_path):
+    def __init__(self, data_path, type_of_recording):
         # relativ or absolute filepath ?
-        self.file_path = file_path
-        self.recording_type = os.path.basename(file_path).split(".")[0]
+        # are all files .wav?
+        self.file_path = f"{os.path.join(data_path, type_of_recording)}.wav"
+        # self.recording_type = os.path.basename(file_path).split(".")[0]
+        self.recording_type = type_of_recording
         self.target_sample_rate = 44100
         self.target_duration_seconds = 2
+        self.n_fft = 2048
+        self.hop_size = 512
+        self.n_MFCCs = 15
         self.n_samples_target = self.target_sample_rate * self.target_duration_seconds
         self.original_sample_rate = None
+        self.MFCCs = self.get_MFCCs()
+
+
+
+    def get_MFCCs(self):
+        audio, sr = self.get_audio(processed=True)
+        mfccs = librosa.feature.mfcc(y=audio,
+                                     n_fft=self.n_fft,
+                                     hop_length=self.hop_size,
+                                     n_mfcc=self.n_MFCCs)
+        return mfccs
+
+
+
 
 
     def get_audio(self, processed=True):
@@ -50,6 +70,16 @@ class AudioRecording:
         librosa.display.waveshow(audio, sr=sr)
         plt.xlabel("Time")
         plt.ylabel("Amplitude")
+        # plt.show()
+
+
+    def show_MFCCs(self):
+        plt.figure()
+        librosa.display.specshow(self.MFCCs)
+        plt.xlabel("Time Frame")
+        plt.ylabel("MFCC")
+        plt.colorbar()
+        return self.MFCCs
         # plt.show()
 
 
