@@ -16,18 +16,27 @@ sd.query_devices()
 DATA_PATH = os.path.join(os.getcwd(), "data/Coswara_processed/Recordings")
 os.chdir(DATA_PATH)
 participant_id = os.listdir()[5]
+participant_id = "00xKcQMmcAhX8CODgBBLOe7Dm0T2"
 # os.chdir(participant_id)
 participant_file_path = os.path.join(DATA_PATH, participant_id)
 # audioFilePath = os.path.join(os.listdir()[5], "cough-heavy.wav")
 
 
 participant = Participant(participant_id)
-participant.heavy_cough.play_audio()
-participant.deep_breath.play_audio()
+# participant.heavy_cough.play_audio()
+# participant.deep_breath.play_audio()
 
 participant.heavy_cough.show_waveform()
 participant.deep_breath.show_waveform()
 plt.show()
+
+
+
+
+
+
+
+
 
 
 

@@ -17,7 +17,7 @@ class AudioRecording:
         # self.recording_type = os.path.basename(file_path).split(".")[0]
         self.recording_type = type_of_recording
         self.target_sample_rate = 44100
-        self.target_duration_seconds = 2
+        self.target_duration_seconds = 5
         self.n_fft = 2048
         self.hop_size = 512
         self.n_MFCCs = 15
