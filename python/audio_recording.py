@@ -6,15 +6,11 @@ import librosa.display
 import matplotlib.pyplot as plt
 
 
-
 class AudioRecording:
 
-
     def __init__(self, data_path, type_of_recording):
-        # relativ or absolute filepath ?
         # are all files .wav?
         self.file_path = f"{os.path.join(data_path, type_of_recording)}.wav"
-        # self.recording_type = os.path.basename(file_path).split(".")[0]
         self.recording_type = type_of_recording
         self.target_sample_rate = 44100
         self.target_duration_seconds = 5
@@ -26,7 +22,6 @@ class AudioRecording:
         self.MFCCs = self.get_MFCCs()
 
 
-
     def get_MFCCs(self):
         audio, sr = self.get_audio(processed=True)
         mfccs = librosa.feature.mfcc(y=audio,
@@ -34,10 +29,6 @@ class AudioRecording:
                                      hop_length=self.hop_size,
                                      n_mfcc=self.n_MFCCs)
         return mfccs
-
-
-
-
 
     def get_audio(self, processed=True):
         """ Prcessing of original audio if 'processed=True':\n
@@ -63,7 +54,6 @@ class AudioRecording:
             audio = audio / np.max(np.abs(audio))
         return audio, file_sample_rate
 
-
     def show_waveform(self, processed=True):
         plt.figure()
         audio, sr = self.get_audio(processed)
@@ -72,18 +62,31 @@ class AudioRecording:
         plt.ylabel("Amplitude")
         # plt.show()
 
-
     def show_MFCCs(self):
         plt.figure()
         librosa.display.specshow(self.MFCCs)
         plt.xlabel("Time Frame")
         plt.ylabel("MFCC")
         plt.colorbar()
-        return self.MFCCs
-        # plt.show()
-
 
     def play_audio(self, processed=True):
         data, sr = self.get_audio(processed)
         sd.play(data, sr)
         sd.wait()
+
+# TODO:
+#  ################################################ STFT ###############################################################
+# n_fft = 2048
+# hop_size = 512
+# stft = librosa.stft(audio, hop_length=hop_size, n_fft=n_fft)
+# spectrogram = librosa.amplitude_to_db(np.abs(stft))
+#
+# # librosa.display.specshow(spectrogram)
+# # plt.xlabel("Time")
+# # plt.ylabel("Frequency / [Hz]")
+# # plt.colorbar()
+# # plt.show()
+# TODO:
+#  ############################################# clipping present? #####################################################
+
+# TODO: include audio quality measure from dataset
