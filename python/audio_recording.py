@@ -19,6 +19,8 @@ class AudioRecording:
         self.n_MFCCs = 15
         self.n_samples_target = self.target_sample_rate * self.target_duration_seconds
         self.original_sample_rate = None
+        self.original_duration = None
+        self.original_duration_trimmed_silence = None
         self.MFCCs = self.get_MFCCs()
 
 
@@ -38,6 +40,7 @@ class AudioRecording:
                 - cut or padded to specified length"""
 
         audio, file_sample_rate = librosa.load(self.file_path, sr=None)
+        self.original_duration = round(len(audio) / file_sample_rate, 2)
         self.original_sample_rate = file_sample_rate
         if processed:
             # resample
@@ -45,6 +48,7 @@ class AudioRecording:
             file_sample_rate = self.target_sample_rate
             # trim
             audio, _ = librosa.effects.trim(audio, top_db=54)
+            self.original_duration_trimmed_silence = round(len(audio) / self.target_sample_rate, 2)
             # cut or pad to self.target_duration_seconds
             if len(audio) < self.n_samples_target:
                 audio = np.pad(audio, (0, self.n_samples_target - len(audio)))
