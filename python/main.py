@@ -25,6 +25,18 @@ print(metadata.covid_test_result.value_counts())
 print(metadata.covid_health_status.value_counts())
 
 
+# # there are some sort of labels included in the coswara GitHub page but the labels do not correlate with the
+# # "covid_health_status" (There are two labels: "1" and "2" and there are "healthy" participants in both label categories
+# labelsPath_original_coswara = "D:/Archiv/Studium/Master/6.-Semester/Masters_Thesis/Git/acoustic_covid_detection" \
+#                               "/python/data/Coswara-Data/technical_validation/data/cough-heavy/all "
+# with open(labelsPath_original_coswara) as f:
+#     lines = f.readlines()
+#     lines = [line.strip().split() for line in lines]
+#     ids = [line[0] for line in lines]
+#     labels = [int(line[1]) for line in lines]
+#
+
+
 class CustomDataset(Dataset):
     def __init__(self, transform=None):
         self.transform = transform
@@ -35,22 +47,26 @@ class CustomDataset(Dataset):
         input_data = self.participants[idx].heavy_cough.get_MFCCs()
         if self.transform:
             input_data = self.transform(input_data)
-
-        label = self.participants[idx].metadata.covid_test_result
-        if label == "p":
-            label = 1
-        elif label == "n":
-            label = 0
-        else:
-            label = 0
-            # TODO how to handle this? (label == "na" || label == "ut") --> what is "ut" anyways? untested?
-            # only 1300 of 2700 have a test result entry.
-            # only 900-1000 have an actual result (680 positive, 250 negative?????)
+        label = self.participants[idx].get_label()
+        # label = self.participants[idx].meta_data["covid_test_result"]
+        # if label == "p":
+        #     label = 1
+        # elif label == "n":
+        #     label = 0
+        # else:
+        #     label = 0
+        #     # TODO how to handle this? (label == "na" || label == "ut") --> what is "ut" anyways? untested?
+        #     # only 1300 of 2700 have a test result entry.
+        #     # only 900-1000 have an actual result (680 positive, 250 negative?????)
 
         return input_data, torch.tensor(label)
 
     def __len__(self):
         return len(self.participants)
+
+    def get_object(self, idx):
+        return self.participants[idx]
+
 
 
 class MyCNN(nn.Module):
@@ -90,8 +106,9 @@ n_epochs = 5
 learning_rate = 0.0001
 device = "cpu"
 
-data_set = CustomDataset(transform=ToTensor)
-train_set, test_set = torch.utils.data.random_split(data_set, [500, 500], torch.Generator.manual_seed(42))
+data_set = CustomDataset(transform=ToTensor())
+# train_set, test_set = torch.utils.data.random_split(data_set, [10, 10], torch.Generator.manual_seed(42))
+train_set, test_set = torch.utils.data.random_split(data_set, [32, 32])
 data_loader = DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True)
 
 my_cnn = MyCNN().to(device)

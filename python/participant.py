@@ -1,9 +1,12 @@
 from audio_recording import AudioRecording
 import os
 import pandas as pd
-
+covid_negative_labels = ["healthy"]
+covid_positive_labels = ["positive_mild", "positive_moderate", "positive_asymp"]
+covid_unknown_labels = ["under_validation", "no_resp_illness_exposed", "resp_illness_not_identified", "recovered_full"]
 
 class Participant:
+
 
     def __init__(self, participant_id):
         self.id = participant_id
@@ -23,5 +26,17 @@ class Participant:
         data = pd.read_csv("data/Coswara_processed/reformatted_metadata.csv")
         self.meta_data = data[data["user_id"] == self.id].to_dict("records")[0]
         # creates an additional column for pandas dataframe index that is not really needed or wanted
-        # TODO maybe have covid test result be a direct attribute of the Participant
-        #  class and not within the metadata dict
+
+
+    def get_label(self):
+        # returns 0 if the participant is considered healthy (including recovered cases)
+        # or 1 if a covid infection is assumed (positive PCR or antigen test)
+        if self.meta_data["covid_health_status"] in covid_negative_labels:
+            label = 0
+        elif self.meta_data["covid_health_status"] in covid_positive_labels:
+            label = 1
+        else:
+            label = None
+        # TODO raise error if it cannot be said if the participant is positive or negative
+        return label
+

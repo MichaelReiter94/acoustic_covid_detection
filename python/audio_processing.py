@@ -19,9 +19,9 @@ participant_ids = participant_ids[:5]
 
 participants = []
 
-erronous_ids = ['0dE8pniDGCZp0gYMy23fvjpZBDr1', '0dfJArS4xbNhay72hpzOvlHkpIj2', '0Js6ZUZQ9NUnu568Fh7B6mZ1R8o1',
-                '0M4YhLM7FwWO5IjCqhi7MlBhvJv2', '0mkAUAbpROMIFjKpdFxlUnYTV262', '1NQvmLMrJyTwrmbNwAm6wDT4wpz2',
-                '1R9RcXlOOLhCmAYuqdRSGP3b0OD3', '1Vm44aluw7PMy2mfETHc3MvwQxx1']
+# erronous_ids = ['0dE8pniDGCZp0gYMy23fvjpZBDr1', '0dfJArS4xbNhay72hpzOvlHkpIj2', '0Js6ZUZQ9NUnu568Fh7B6mZ1R8o1',
+#                 '0M4YhLM7FwWO5IjCqhi7MlBhvJv2', '0mkAUAbpROMIFjKpdFxlUnYTV262', '1NQvmLMrJyTwrmbNwAm6wDT4wpz2',
+#                 '1R9RcXlOOLhCmAYuqdRSGP3b0OD3', '1Vm44aluw7PMy2mfETHc3MvwQxx1']
 
 error_ids_zero_length = []
 error_ids_all_zeros = []
