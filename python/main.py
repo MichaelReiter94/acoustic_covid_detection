@@ -9,7 +9,7 @@ import torch.utils.data
 from torch import nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset
-from torchvision import datasets
+# from torchvision import datasets
 from torchvision.transforms import ToTensor
 import pandas as pd
 
@@ -25,16 +25,14 @@ print(metadata.covid_test_result.value_counts())
 print(metadata.covid_health_status.value_counts())
 
 
-# # there are some sort of labels included in the coswara GitHub page but the labels do not correlate with the
-# # "covid_health_status" (There are two labels: "1" and "2" and there are "healthy" participants in both label categories
-# labelsPath_original_coswara = "D:/Archiv/Studium/Master/6.-Semester/Masters_Thesis/Git/acoustic_covid_detection" \
-#                               "/python/data/Coswara-Data/technical_validation/data/cough-heavy/all "
-# with open(labelsPath_original_coswara) as f:
-#     lines = f.readlines()
-#     lines = [line.strip().split() for line in lines]
-#     ids = [line[0] for line in lines]
-#     labels = [int(line[1]) for line in lines]
-#
+# # there are some sort of labels included in the coswara GitHub page but the labels do not correlate with the #
+# "covid_health_status" (There are two labels: "1" and "2" and there are "healthy" participants in both label
+# categories labelsPath_original_coswara =
+# "D:/Archiv/Studium/Master/6.-Semester/Masters_Thesis/Git/acoustic_covid_detection" \
+# "/python/data/Coswara-Data/technical_validation/data/cough-heavy/all " with open(labelsPath_original_coswara) as f:
+# lines = f.readlines() lines = [line.strip().split() for line in lines] ids = [line[0] for line in lines] labels = [
+# int(line[1]) for line in lines]
+
 
 
 class CustomDataset(Dataset):
@@ -42,23 +40,16 @@ class CustomDataset(Dataset):
         self.transform = transform
         with open("data/Coswara_processed/pickles/participant_objects_subset.pickle", "rb") as f:
             self.participants = pickle.load(f)
+        self.drop_invalid_labels()
+
+    def drop_invalid_labels(self):
+        self.participants = [participant for participant in self.participants if participant.get_label() is not None]
 
     def __getitem__(self, idx):
         input_data = self.participants[idx].heavy_cough.get_MFCCs()
         if self.transform:
             input_data = self.transform(input_data)
         label = self.participants[idx].get_label()
-        # label = self.participants[idx].meta_data["covid_test_result"]
-        # if label == "p":
-        #     label = 1
-        # elif label == "n":
-        #     label = 0
-        # else:
-        #     label = 0
-        #     # TODO how to handle this? (label == "na" || label == "ut") --> what is "ut" anyways? untested?
-        #     # only 1300 of 2700 have a test result entry.
-        #     # only 900-1000 have an actual result (680 positive, 250 negative?????)
-
         return input_data, torch.tensor(label)
 
     def __len__(self):
@@ -101,6 +92,7 @@ class MyCNN(nn.Module):
         return prediction
 
 
+# <editor-fold desc="NN set-up">
 batch_size = 32
 n_epochs = 5
 learning_rate = 0.0001
@@ -108,13 +100,16 @@ device = "cpu"
 
 data_set = CustomDataset(transform=ToTensor())
 # train_set, test_set = torch.utils.data.random_split(data_set, [10, 10], torch.Generator.manual_seed(42))
-train_set, test_set = torch.utils.data.random_split(data_set, [32, 32])
-data_loader = DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True)
+# train_set, test_set = torch.utils.data.random_split(data_set, [32, 32])
+data_loader = DataLoader(dataset=data_set, batch_size=5, shuffle=True)
 
 my_cnn = MyCNN().to(device)
-optimizer = torch.optim.Adam(my_cnn.parameters(), lr=learning_rate)
+optimizer = Adam(my_cnn.parameters(), lr=learning_rate)
 loss_func = nn.BCELoss()
+# </editor-fold>
 
+
+# <editor-fold desc="Section">
 for epoch in range(n_epochs):
     for batch in data_loader:
         input_data, label = batch
@@ -126,13 +121,4 @@ for epoch in range(n_epochs):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
-
-
-
-
-
-
-
-
-
+# </editor-fold>

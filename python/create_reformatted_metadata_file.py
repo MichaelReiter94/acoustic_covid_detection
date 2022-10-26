@@ -2,7 +2,7 @@ import pandas as pd
 import pickle
 import numpy as np
 
-metadata = pd.read_csv("data/Coswara_processed/combined_data.csv")
+metadata = pd.read_csv("data/Coswara-Data/combined_data.csv")
 
 ######################################## Rename Metadata to readable entries ###########################################
 
@@ -52,7 +52,7 @@ metadata.rename(meta_data_labels, axis="columns", inplace=True)
 #       55 only contain 0 within the (non-zero length) audio signal
 #       2648 valid participants are left after that
 
-with open("data/Coswara_processed/pickles/unvalid_recordings.pickle", "rb") as f:
+with open("data/Coswara_processed/pickles/invalid_recordings.pickle", "rb") as f:
     invalid_recordings = pickle.load(f)
 
 metadata['recording_error'] = np.nan
