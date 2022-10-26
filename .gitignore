@@ -133,3 +133,5 @@ dmypy.json
 
 
 python/data/
+
+python/.idea/
