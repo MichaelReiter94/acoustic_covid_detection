@@ -1,9 +1,11 @@
 from audio_recording import AudioRecording
 import os
 import pandas as pd
-covid_negative_labels = ["healthy"]
-covid_positive_labels = ["positive_mild", "positive_moderate", "positive_asymp"]
-covid_unknown_labels = ["under_validation", "no_resp_illness_exposed", "resp_illness_not_identified", "recovered_full"]
+
+NEGATIVE_LABELS = ["healthy"]
+POSITIVE_LABELS = ["positive_mild", "positive_moderate", "positive_asymp"]
+UNKNOWN_LABELS = ["under_validation", "no_resp_illness_exposed", "resp_illness_not_identified", "recovered_full"]
+
 
 class Participant:
 
@@ -11,7 +13,6 @@ class Participant:
     def __init__(self, participant_id):
         self.id = participant_id
         data_directory = "data/Coswara_processed/Recordings"
-        # data_directory = ""
         self.file_path_participant = os.path.join(data_directory, self.id)
         self.heavy_cough = AudioRecording(self.file_path_participant, type_of_recording="cough-heavy")
         # self.shallow_cough = AudioRecording(self.file_path_participant, type_of_recording="cough-shallow")
@@ -29,11 +30,13 @@ class Participant:
 
 
     def get_label(self):
-        # returns 0 if the participant is considered healthy (including recovered cases)
-        # or 1 if a covid infection is assumed (positive PCR or antigen test)
-        if self.meta_data["covid_health_status"] in covid_negative_labels:
+        """returns 0 if participant is considered healthy or 1 if a covid infection was determined\n
+        This label is derived from the 'covid_health_status' from the coswara dataset which includes several
+        (sub-)categories"""
+
+        if self.meta_data["covid_health_status"] in NEGATIVE_LABELS:
             label = 0
-        elif self.meta_data["covid_health_status"] in covid_positive_labels:
+        elif self.meta_data["covid_health_status"] in POSITIVE_LABELS:
             label = 1
         else:
             label = None

@@ -23,7 +23,6 @@ class AudioRecording:
         self.original_duration_trimmed_silence = None
         self.MFCCs = self.get_MFCCs()
 
-
     def get_MFCCs(self):
         audio, sr = self.get_audio(processed=True)
         mfccs = librosa.feature.mfcc(y=audio,
@@ -78,19 +77,5 @@ class AudioRecording:
         sd.play(data, sr)
         sd.wait()
 
-# TODO:
-#  ################################################ STFT ###############################################################
-# n_fft = 2048
-# hop_size = 512
-# stft = librosa.stft(audio, hop_length=hop_size, n_fft=n_fft)
-# spectrogram = librosa.amplitude_to_db(np.abs(stft))
-#
-# # librosa.display.specshow(spectrogram)
-# # plt.xlabel("Time")
-# # plt.ylabel("Frequency / [Hz]")
-# # plt.colorbar()
-# # plt.show()
-# TODO:
-#  ############################################# clipping present? #####################################################
+# TODO: detect if clipping was present (redundant because we already have a measure for the audio quality?
 
-# TODO: include audio quality measure from dataset

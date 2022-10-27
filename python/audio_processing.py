@@ -1,11 +1,5 @@
 import librosa
-import librosa.display
 import os
-import matplotlib.pyplot as plt
-import numpy as np
-import sounddevice as sd
-from audio_recording import AudioRecording
-from time import time
 from participant import Participant
 import pickle
 
@@ -13,14 +7,13 @@ error_ids_zero_length = []
 error_ids_all_zeros = []
 error_ids_unknown = []
 errors = {}
-
+participants = []
 UPDATE_INVALID_RECORDINGS = False
+
 
 DATA_PATH = os.path.join(os.getcwd(), "data/Coswara_processed/Recordings")
 participant_ids = os.listdir(DATA_PATH)
 
-
-participants = []
 for counter, ID in enumerate(participant_ids):
     print(f"{counter + 1} / {len(participant_ids)}")
     try:
