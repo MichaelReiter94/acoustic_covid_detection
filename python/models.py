@@ -1,19 +1,21 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+TIMESTEPS = 259
+MFCC_BINS = 15
 
 
 class BrogrammersModel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.input_size = (431, 15, 1)
+        self.input_size = (TIMESTEPS, MFCC_BINS, 1)
         n_filters = 64
 
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=n_filters, kernel_size=3)
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=1)
         self.conv2 = nn.Conv2d(in_channels=n_filters, out_channels=n_filters, kernel_size=2)
         self.batch_norm2d = nn.BatchNorm2d(n_filters)
-        self.dense1 = nn.Linear(in_features=427*11*n_filters, out_features=256)
+        self.dense1 = nn.Linear(in_features=(TIMESTEPS-4) * (MFCC_BINS - 4) * n_filters, out_features=256)
         self.dense2 = nn.Linear(in_features=256, out_features=128)
         self.dense3 = nn.Linear(in_features=128, out_features=1)
 
@@ -36,7 +38,7 @@ class BrogrammersModel(nn.Module):
 class BrogrammersSequentialModel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.input_size = (431, 15, 1)
+        self.input_size = (TIMESTEPS, MFCC_BINS, 1)
         n_filters = 64
 
         self.model = nn.Sequential(
@@ -61,7 +63,7 @@ class BrogrammersSequentialModel(nn.Module):
             # 32x64x11x429 --> 32x(64*11*429) = 32x300608 because 32 is the batch size meaning we have
             # 32 samples we do not want to combine
             nn.Flatten(start_dim=1),
-            nn.Linear(in_features=427*11*n_filters, out_features=256, bias=True),
+            nn.Linear(in_features=(TIMESTEPS-4) * (MFCC_BINS - 4) * n_filters, out_features=256, bias=True),
             nn.ReLU(),
             # TODO add kernel, bias and activity regularizers???
             nn.Dropout(p=0.5),

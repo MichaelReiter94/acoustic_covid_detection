@@ -12,8 +12,8 @@ class AudioRecording:
         # are all files .wav?
         self.file_path = f"{os.path.join(data_path, type_of_recording)}.wav"
         self.recording_type = type_of_recording
-        self.target_sample_rate = 44100
-        self.target_duration_seconds = 5
+        self.target_sample_rate = 22050
+        self.target_duration_seconds = 6
         self.n_fft = 2048
         self.hop_size = 512
         self.n_MFCCs = 15
