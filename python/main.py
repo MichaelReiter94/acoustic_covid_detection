@@ -1,20 +1,20 @@
-import os
+from models import BrogrammersModel, BrogrammersSequentialModel
+from evaluation_and_tracking import ModelEvaluator
+
 import numpy as np
-# from participant import Participant
 import matplotlib.pyplot as plt
 import pickle
-import random
 import torch.utils.data
 from torch import nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset
-# from torchvision import datasets
 from torchvision.transforms import ToTensor
-import pandas as pd
-from torchinfo import summary
-from models import BrogrammersModel, BrogrammersSequentialModel
 from torch.utils.data import random_split
-from evaluation_and_tracking import ModelEvaluator
+from torchinfo import summary
+import os
+import pandas as pd
+# from participant import Participant
+import random
 
 MODEL_NAME = "brogrammers_2022_10_30"
 MODEL_PATH =         f"data/Coswara_processed/models/{MODEL_NAME}.pth"

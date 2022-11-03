@@ -2,9 +2,9 @@ from audio_recording import AudioRecording
 import os
 import pandas as pd
 
-NEGATIVE_LABELS = ["healthy"]
+NEGATIVE_LABELS = ["healthy", "resp_illness_not_identified", "no_resp_illness_exposed"]
 POSITIVE_LABELS = ["positive_mild", "positive_moderate", "positive_asymp"]
-UNKNOWN_LABELS = ["under_validation", "no_resp_illness_exposed", "resp_illness_not_identified", "recovered_full"]
+UNKNOWN_LABELS =  ["under_validation", "recovered_full"]
 
 
 class Participant:

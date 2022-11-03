@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "C:\Users\Michi\Anaconda3\envs\python_v3-8\lib\site-packages\IPython\core\interactiveshell.py", line 3378, in run_code
+    exec(code_obj, self.user_global_ns, self.user_ns)
+  File "<ipython-input-4-4e422a61f896>", line 1, in <module>
+    test["index"]
+TypeError: list indices must be integers or slices, not str

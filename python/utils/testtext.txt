@@ -1,6 +1,0 @@
-this is a test text file
-
-one two check
-
-123123
-readme
