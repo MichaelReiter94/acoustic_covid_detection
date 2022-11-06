@@ -1,5 +1,8 @@
-import librosa
 import os
+path = os.environ.get("PATH")
+additional_path = "C:\\Users\\micha\\anaconda3\\envs\\ai38;C:\\Users\\micha\\anaconda3\\envs\\ai38\\Library\\mingw-w64\\bin;C:\\Users\\micha\\anaconda3\\envs\\ai38\\Library\\usr\\bin;C:\\Users\\micha\\anaconda3\\envs\\ai38\\Library\\bin;C:\\Users\\micha\\anaconda3\\envs\\ai38\\Scripts;C:\\Users\\micha\\anaconda3\\envs\\ai38\\bin;C:\\Users\\micha\\anaconda3\\condabin;"
+os.environ["PATH"] = additional_path + path
+import librosa
 from participant import Participant
 import pickle
 
