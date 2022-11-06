@@ -2,7 +2,7 @@ import pandas as pd
 import pickle
 import numpy as np
 
-metadata = pd.read_csv("data/Coswara-Data/combined_data.csv")
+metadata = pd.read_csv("data/Coswara_processed/combined_data.csv")
 
 ######################################## Rename Metadata to readable entries ###########################################
 
