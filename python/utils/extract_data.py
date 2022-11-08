@@ -1,5 +1,8 @@
 import os
-
+# get data extracted from the original coswara dataset
+# extracting and moving to other folders
+# make sure, that afterwards, there are only folders with "Participant IDs" in the target directory and no
+# ".DS..." files or CSV files
 
 def get_subdirectories():
     subdirectories = []
@@ -39,8 +42,8 @@ def move_folder_content():
 
 
 # You need to create this subdirectory first, otherwise there might be problems
-DATA_DIR_TARGET = os.path.join(os.getcwd(), "data/Coswara_processed/Recordings")
-DATA_DIR_COSWARA = os.path.join(os.getcwd(), "data/Coswara-Data/")
+DATA_DIR_TARGET = os.path.join(os.getcwd(), "../data/Coswara_processed/Recordings")
+DATA_DIR_COSWARA = os.path.join(os.getcwd(), "../data/Coswara-Data/")
 os.chdir(DATA_DIR_COSWARA)
 
 subdirs_coswara = get_subdirectories()

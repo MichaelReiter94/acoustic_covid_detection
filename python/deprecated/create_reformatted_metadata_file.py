@@ -1,3 +1,8 @@
+#######################################################################################################################
+#       DEPRECATED - USE CORRESPONDING JUPYTER NOTEBOOK OR PYTHON SCRIPT IN UTILS INSTEAD
+#######################################################################################################################
+
+
 import pandas as pd
 import pickle
 import numpy as np
@@ -52,7 +57,7 @@ metadata.rename(meta_data_labels, axis="columns", inplace=True)
 #       55 only contain 0 within the (non-zero length) audio signal
 #       2648 valid participants are left after that
 
-with open("data/Coswara_processed/pickles/invalid_recordings.pickle", "rb") as f:
+with open("../data/Coswara_processed/pickles/invalid_recordings.pickle", "rb") as f:
     invalid_recordings = pickle.load(f)
 
 metadata['recording_error'] = np.nan
@@ -63,7 +68,7 @@ for (error, error_info) in invalid_recordings.items():
 print(metadata.loc[:, "recording_error"].value_counts())
 
 ################################# Add audio quality information from other CSVs ########################################
-PATH = "data/Coswara-Data/annotations/"
+PATH = "../data/Coswara-Data/annotations/"
 recording_quality_files = {"audio_quality_deep_breathing":  PATH + "breathing-deep_labels_pravinm.csv",
                            "audio_quality_shallow_breathing": PATH + "breathing-shallow_labels_pravinm.csv",
                            "audio_quality_heavy_cough": PATH + "cough-heavy_labels_debottam.csv",
