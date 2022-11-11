@@ -12,10 +12,13 @@ class BrogrammersModel(nn.Module):
         n_filters = 64
 
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=n_filters, kernel_size=3)
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=1)
+        # TODO the stride of the maxpool layer might be wrong... (not specified in paper but no arguments means
+        #  possibly that the stride = the kernel size
+        # self.maxpool = nn.MaxPool2d(kernel_size=2, stride=1)
+        self.maxpool = nn.MaxPool2d(kernel_size=2)
         self.conv2 = nn.Conv2d(in_channels=n_filters, out_channels=n_filters, kernel_size=2)
         self.batch_norm2d = nn.BatchNorm2d(n_filters)
-        self.dense1 = nn.Linear(in_features=(TIMESTEPS-4) * (MFCC_BINS - 4) * n_filters, out_features=256)
+        self.dense1 = nn.Linear(in_features=((TIMESTEPS-2)//2-1) * ((MFCC_BINS - 2)//2-1) * n_filters, out_features=256)
         self.dense2 = nn.Linear(in_features=256, out_features=128)
         self.dense3 = nn.Linear(in_features=128, out_features=1)
 
@@ -30,7 +33,10 @@ class BrogrammersModel(nn.Module):
         x = F.dropout(x, p=0.5)
         x = F.relu(self.dense2(x))
         x = F.dropout(x, p=0.3)
-        x = torch.sigmoid(self.dense3(x))
+        x = self.dense3(x)
+        # no sigmoid activation because the now used BCELossWithLogits class has the activation function included (
+        # which improves numerical stability/precision) Also this class has the possibility to add a weighting to the
+        # two classes to adress class imbalance!! x = torch.sigmoid(x)
         return x
 
 
@@ -50,6 +56,9 @@ class BrogrammersSequentialModel(nn.Module):
             # standard for MaxPool2d = no padding
             # kernel size = 2 = 2x2 and stride = 1 shrinks down each dimension by 1
             # --> 429x13 shrink down to 428x12
+
+            # or with stride=kernel size:
+            # 429//2 x 13//2 = 214x6
             nn.MaxPool2d(kernel_size=2, stride=1),
             # kernel size = 2 = 2x2 and stride = 1 shrinks down each dimension by 1
             # --> 428x12 shrink down to 427x11

@@ -1,6 +1,6 @@
 from models import BrogrammersModel, BrogrammersSequentialModel
-from evaluation_and_tracking import ModelEvaluator
-
+from evaluation_and_tracking import ModelEvaluator, IntraEpochMetricsTracker
+from datetime import datetime
 
 import librosa
 
@@ -14,6 +14,8 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import ToTensor
 from torch.utils.data import random_split
 from torchinfo import summary
+from torch.utils.tensorboard import SummaryWriter
+
 import os
 import pandas as pd
 # from participant import Participant
@@ -23,6 +25,7 @@ MODEL_NAME = "brogrammers_2022_10_30"
 MODEL_PATH =         f"data/Coswara_processed/models/{MODEL_NAME}.pth"
 MODEL_TRACKER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}_tracker.pickle"
 OPTIMIZER_PATH =     f"data/Coswara_processed/models/{MODEL_NAME}_optimizer.pickle"
+
 
 class CustomDataset(Dataset):
     def __init__(self, transform=None):
@@ -58,31 +61,34 @@ class CustomDataset(Dataset):
         return np.unique(self.labels, return_counts=True)
 
 
-def train_on_batch(model, current_batch, current_loss_func, current_optimizer):
+def train_on_batch(model, current_batch, current_loss_func, current_optimizer, tracker):
     model.train()
     input_data, label = current_batch
     input_data, label = input_data.to(device), label.to(device)
     prediction = torch.squeeze(model(input_data))
     loss = current_loss_func(prediction, label)
+    accuracy = get_accuracy(prediction, label)
+    tracker.add_metrics(loss, accuracy, label, prediction)
 
     # backpropagation
     current_optimizer.zero_grad()
     loss.backward()
     current_optimizer.step()
-    accuracy = get_accuracy(prediction, label)
     # returns a copy/a float version of the scalar tensor of the loss function
-    return float(loss), accuracy
+    # return float(loss), accuracy
 
 
-def evaluate_batch(model, batch, loss_func):
+def evaluate_batch(model, batch, loss_func, tracker):
     model.eval()
     input_data, label = batch
     input_data, label = input_data.to(device), label.to(device)
     prediction = torch.squeeze(model(input_data))
     loss = loss_func(prediction, label)
     accuracy = get_accuracy(prediction, label)
+    tracker.add_metrics(loss, accuracy, label, prediction)
+
     # returns a copy/a float version of the scalar tensor of the loss function
-    return float(loss), accuracy
+    # return float(loss), accuracy
 
 
 def get_accuracy(predictions, labels, threshold=0.5):
@@ -98,11 +104,11 @@ def get_accuracy(predictions, labels, threshold=0.5):
 ############################################# dataset setup ############################################################
 # hyperparameters
 batch_size = 32
-learning_rate = 0.0001
-n_epochs = 1
+learning_rate = 0.00001
+n_epochs = 10
 device = "cpu"
 
-data_set = CustomDataset(transform=ToTensor())
+data_set = CustomDataset()
 print(f"The length of the dataset = {len(data_set)}")
 n_train_samples = int(0.8 * len(data_set))
 n_val_samples = len(data_set) - int(n_train_samples)
@@ -116,64 +122,78 @@ eval_loader = DataLoader(dataset=eval_set, batch_size=batch_size, shuffle=True)
 ################################################ CNN setup #############################################################
 my_cnn = BrogrammersModel().to(device)
 summary(my_cnn, (batch_size, 1, 15, 259))
-try:
-    my_cnn.load_state_dict(torch.load(MODEL_PATH))
-except FileNotFoundError:
-    print("no saved model parameters found")
+
+optimizer = Adam(my_cnn.parameters(), lr=learning_rate, weight_decay=0.0001)
+LOAD_FROM_DISC = False
+if LOAD_FROM_DISC:
+    try:
+        my_cnn.load_state_dict(torch.load(MODEL_PATH))
+        print("model weights loaded from disc")
+    except FileNotFoundError:
+        print("no saved model parameters found")
 
 
-optimizer = Adam(my_cnn.parameters(), lr=learning_rate)
-try:
-    optimizer.load_state_dict(torch.load(OPTIMIZER_PATH))
-except FileNotFoundError:
-    print("no optimizer state found")
+    try:
+        optimizer.load_state_dict(torch.load(OPTIMIZER_PATH))
+        print("optimizer state loaded from disc")
+    except FileNotFoundError:
+        print("no optimizer state found")
+
+#
+# try:
+#     with open(MODEL_TRACKER_PATH, "rb") as f:
+#         tracker = pickle.load(f)
+# except FileNotFoundError:
+#     tracker = ModelEvaluator()
+# tracker.train()
+tracker = IntraEpochMetricsTracker()
+# loss_func = nn.BCELoss()
+# adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
+loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3]))
 
 
-try:
-    with open(MODEL_TRACKER_PATH, "rb") as f:
-        tracker = pickle.load(f)
-except FileNotFoundError:
-    tracker = ModelEvaluator()
-tracker.train()
 
-loss_func = nn.BCELoss()
+############################################### Tensorboard Tracker ####################################################
+date = datetime.today().strftime("%Y-%m-%d")
+writer = SummaryWriter(log_dir=f"run/added_class_weights-{date}")
+
+
 ################################################## training ############################################################
 for epoch in range(n_epochs):
 
     print("TRAINING")
     my_cnn.train()
+    tracker.reset()
     for i, batch in enumerate(train_loader):
-        current_loss, current_accuracy = train_on_batch(my_cnn, batch, loss_func, optimizer)
-        print(f"Loss per sample = {current_loss:.3f} -- Accuracy:{current_accuracy * 100.0:.1f}% --  "
+        train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
+        print(f"Loss per sample = {tracker.loss[-1]:.3f} -- Accuracy:{tracker.accuracy[-1] * 100.0:.1f}% --  "
               f"iteration {i + 1}/{len(train_loader)}")
-        tracker.track_loss(current_loss, mode="train")
-        print(my_cnn.dense1.weight[0])
+    loss_t, acc_t, aucroc_t, tpr_at_95_t, auc_pr_t = tracker.get_epoch_metrics()
+
 
     print("EVALUATION")
     my_cnn.eval()
+    tracker.reset()
     for i, batch in enumerate(eval_loader):
-        current_loss, current_accuracy = evaluate_batch(my_cnn, batch, loss_func)
-        tracker.track_loss(current_loss, mode="eval")
-        print(f"Loss per sample = {current_loss:.3f} -- Accuracy:{current_accuracy * 100.0:.1f}% --  "
+        evaluate_batch(my_cnn, batch, loss_func, tracker)
+        print(f"Loss per sample = {tracker.loss[-1] :.3f} -- Accuracy:{tracker.accuracy[-1] * 100.0:.1f}% --  "
               f"iteration {i + 1}/{len(eval_loader)}")
+    loss_v, acc_v, aucroc_v, tpr_at_95_v, auc_pr_v = tracker.get_epoch_metrics()
 
-    tracker.epoch_has_finished()
+    writer.add_scalars("01_loss", {"train": loss_t, "validation": loss_v}, epoch)
+    writer.add_scalars("02_accuracy", {"train": acc_t, "validation": acc_v}, epoch)
+    writer.add_scalars("03_auc_roc", {"train": aucroc_t, "validation": aucroc_v}, epoch)
+    writer.add_scalars("04_tpr_at_95", {"train": tpr_at_95_t, "validation": tpr_at_95_v}, epoch)
+    writer.add_scalars("05_auc_precision_recall", {"train": auc_pr_t, "validation": auc_pr_v}, epoch)
 
-    # epoch_loss = tracker.get_loss(granularity="epoch", mode="eval")
+
     # if epoch_loss[-1] <= min(epoch_loss):
     #     print("saving new model!")
     #     torch.save(my_cnn.state_dict(), MODEL_PATH)
     #     torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
 
-plt.figure()
-plt.plot(tracker.get_loss(granularity="epoch", mode="train"))
-plt.plot(tracker.get_loss(granularity="epoch", mode="eval"))
-plt.legend(["training loss", "evaluation loss"])
-plt.show()
 
-with open(MODEL_TRACKER_PATH, "wb") as f:
-    pickle.dump(tracker, f)
-
+writer.close()
 print("saving new model!")
 torch.save(my_cnn.state_dict(), MODEL_PATH)
 torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
