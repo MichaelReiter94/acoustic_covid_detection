@@ -137,3 +137,5 @@ python/data/
 python/.idea/
 
 *.lnk
+
+python/run/

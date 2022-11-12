@@ -30,9 +30,10 @@ class BrogrammersModel(nn.Module):
         x = self.batch_norm2d(x)
         x = torch.flatten(x, start_dim=1)
         x = F.relu(self.dense1(x))
-        x = F.dropout(x, p=0.5)
+        # TODO check if dropout is ignored/turned off during model.eval() mode
+        x = F.dropout(x, p=0.5, training=self.training)
         x = F.relu(self.dense2(x))
-        x = F.dropout(x, p=0.3)
+        x = F.dropout(x, p=0.3, training=self.training)
         x = self.dense3(x)
         # no sigmoid activation because the now used BCELossWithLogits class has the activation function included (
         # which improves numerical stability/precision) Also this class has the possibility to add a weighting to the
