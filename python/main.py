@@ -2,8 +2,10 @@ from models import BrogrammersModel, BrogrammersSequentialModel
 from evaluation_and_tracking import ModelEvaluator, IntraEpochMetricsTracker
 from datetime import datetime
 import time
+import librosa
 
 import numpy as np
+import matplotlib.pyplot as plt
 import pickle
 import torch.utils.data
 from torch import nn
@@ -148,7 +150,9 @@ if LOAD_FROM_DISC:
 tracker = IntraEpochMetricsTracker()
 # loss_func = nn.BCELoss()
 # adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
-loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3]))
+# loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3]))
+# TODO check if this works or is necessary
+loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3])).to(device)
 
 
 

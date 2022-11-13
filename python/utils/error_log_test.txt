@@ -4,3 +4,61 @@ Traceback (most recent call last):
   File "<ipython-input-4-4e422a61f896>", line 1, in <module>
     test["index"]
 TypeError: list indices must be integers or slices, not str
+
+
+/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/torchvision/io/image.py:13: UserWarning: Failed to load image Python extension: /clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/torchvision/image.so: undefined symbol: _ZN3c105ErrorC2ENS_14SourceLocationESs
+  warn(f"Failed to load image Python extension: {e}")
+Matplotlib is building the font cache; this may take a moment.
+/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/librosa/util/decorators.py:88: UserWarning: PySoundFile failed. Trying audioread instead.
+  return f(*args, **kwargs)
+Traceback (most recent call last):
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/librosa/core/audio.py", line 164, in load
+    y, sr_native = __soundfile_load(path, offset, duration, dtype)
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/librosa/core/audio.py", line 195, in __soundfile_load
+    context = sf.SoundFile(path)
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/soundfile.py", line 655, in __init__
+    self._file = self._open(file, mode_int, closefd)
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/soundfile.py", line 1213, in _open
+    raise LibsndfileError(err, prefix="Error opening {0!r}: ".format(self.name))
+soundfile.LibsndfileError: Error opening 'data/Coswara_processed/Recordings\\4gkSRZ0IWxVAOJSuVEFhQqrzIYx1\\cough-heavy.wav': System error.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "main.py", line 166, in <module>
+    for i, batch in enumerate(train_loader):
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 681, in __next__
+    data = self._next_data()
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 721, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/torch/utils/data/_utils/fetch.py", line 49, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/torch/utils/data/_utils/fetch.py", line 49, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/torch/utils/data/dataset.py", line 290, in __getitem__
+    return self.dataset[self.indices[idx]]
+  File "main.py", line 46, in __getitem__
+    input_features = self.participants[idx].heavy_cough.get_MFCCs()
+  File "/clusterFS/home/student/reiter/acoustic_covid_detection/audio_recording.py", line 27, in get_MFCCs
+    audio, sr = self.get_audio(processed=True)
+  File "/clusterFS/home/student/reiter/acoustic_covid_detection/audio_recording.py", line 41, in get_audio
+    audio, file_sample_rate = librosa.load(self.file_path, sr=None)
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/librosa/util/decorators.py", line 88, in inner_f
+    return f(*args, **kwargs)
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/librosa/core/audio.py", line 170, in load
+    y, sr_native = __audioread_load(path, offset, duration, dtype)
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/librosa/core/audio.py", line 226, in __audioread_load
+    reader = audioread.audio_open(path)
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/audioread/__init__.py", line 127, in audio_open
+    return BackendClass(path)
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/site-packages/audioread/rawread.py", line 59, in __init__
+    self._fh = open(filename, 'rb')
+FileNotFoundError: [Errno 2] No such file or directory: 'data/Coswara_processed/Recordings\\4gkSRZ0IWxVAOJSuVEFhQqrzIYx1\\cough-heavy.wav'
+Traceback (most recent call last):
+  File "utils/send_notification.py", line 51, in <module>
+    send_mail("michael.reiter94@gmail.com", text=text, subject="Slurm Notification")
+  File "/clusterFS/home/student/reiter/acoustic_covid_detection/utils/utils.py", line 11, in send_mail
+    connection.sendmail(from_addr=gmail,
+  File "/clusterFS/home/student/reiter/Anaconda3/envs/ai38/lib/python3.8/smtplib.py", line 873, in sendmail
+    msg = _fix_eols(msg).encode('ascii')
+UnicodeEncodeError: 'ascii' codec can't encode characters in position 557-558: ordinal not in range(128)

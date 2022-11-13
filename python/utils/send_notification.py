@@ -32,7 +32,8 @@ elif args.program_finished:
     if args.outputLogFile:
         try:
             with open(args.outputLogFile, "r") as f:
-                log_file = f.read()
+                log_file = f.read().encode("ascii", "ignore").decode("ascii")
+
         except FileNotFoundError:
             log_file = f"Log File with name {args.outputLogFile} not found!\n"
 
@@ -41,7 +42,7 @@ elif args.program_finished:
     if args.errorLogFile:
         try:
             with open(args.errorLogFile, "r") as f:
-                error_log = f.read()
+                error_log = f.read().encode("ascii", "ignore").decode("ascii")
         except FileNotFoundError:
             error_log = f"Log File with name {args.errorLogFile} not found!\n"
         text += f"{separator}Error Log-File: \n\n{error_log}\n"

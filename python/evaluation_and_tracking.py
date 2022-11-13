@@ -74,8 +74,8 @@ class IntraEpochMetricsTracker:
     def add_metrics(self, loss, accuracy, labels, predictions):
         self.loss = np.append(self.loss, float(loss))
         self.accuracy = np.append(self.accuracy, float(accuracy))
-        self.labels = np.append(self.labels, np.array(labels))
-        self.predictions = np.append(self.predictions, predictions.detach().numpy())
+        self.labels = np.append(self.labels, labels.cpu().detach().numpy())
+        self.predictions = np.append(self.predictions, predictions.cpu().detach().numpy())
 
     def get_epoch_metrics(self):
         epoch_loss = np.mean(self.loss)

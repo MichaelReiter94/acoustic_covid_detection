@@ -10,7 +10,7 @@ class AudioRecording:
 
     def __init__(self, data_path, type_of_recording):
         # are all files .wav?
-        self.file_path = f"{os.path.join(data_path, type_of_recording)}.wav"
+        self.file_path = f"{os.path.join(data_path, type_of_recording)}.wav".replace("\\", "/")
         self.recording_type = type_of_recording
         self.target_sample_rate = 22050
         self.target_duration_seconds = 6
@@ -37,6 +37,9 @@ class AudioRecording:
                 - the file is resampled to samplerate defined within the class\n
                 - amplitude is normalized\n
                 - cut or padded to specified length"""
+        # TODO this is redundant if the instance was created now. only older objects loaded from disc still have a
+        #  wrong format
+        self.file_path = self.file_path.replace("\\", "/")
 
         audio, file_sample_rate = librosa.load(self.file_path, sr=None)
         self.original_duration = round(len(audio) / file_sample_rate, 2)
