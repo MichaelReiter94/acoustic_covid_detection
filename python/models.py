@@ -12,16 +12,15 @@ class BrogrammersModel(nn.Module):
         n_filters = 64
 
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=n_filters, kernel_size=3)
-        # TODO the stride of the maxpool layer might be wrong... (not specified in paper but no arguments means
+        # TODO the stride of the max-pool layer might be wrong... (not specified in paper but no arguments means
         #  possibly that the stride = the kernel size
-        # self.maxpool = nn.MaxPool2d(kernel_size=2, stride=1)
+        # self.max-pool = nn.MaxPool2d(kernel_size=2, stride=1)
         self.maxpool = nn.MaxPool2d(kernel_size=2)
         self.conv2 = nn.Conv2d(in_channels=n_filters, out_channels=n_filters, kernel_size=2)
         self.batch_norm2d = nn.BatchNorm2d(n_filters)
         self.dense1 = nn.Linear(in_features=((TIMESTEPS-2)//2-1) * ((MFCC_BINS - 2)//2-1) * n_filters, out_features=256)
         self.dense2 = nn.Linear(in_features=256, out_features=128)
         self.dense3 = nn.Linear(in_features=128, out_features=1)
-
 
     def forward(self, input_data):
         x = F.relu(self.conv1(input_data))
@@ -37,9 +36,8 @@ class BrogrammersModel(nn.Module):
         x = self.dense3(x)
         # no sigmoid activation because the now used BCELossWithLogits class has the activation function included (
         # which improves numerical stability/precision) Also this class has the possibility to add a weighting to the
-        # two classes to adress class imbalance!! x = torch.sigmoid(x)
+        # two classes to address class imbalance!! x = torch.sigmoid(x)
         return x
-
 
 
 class BrogrammersSequentialModel(nn.Module):

@@ -45,7 +45,6 @@ for counter, ID in enumerate(participant_ids):
     # </editor-fold>
 
 
-
 with open("data/Coswara_processed/pickles/participant_objects.pickle", "wb") as f:
     pickle.dump(participants, f)
 if UPDATE_INVALID_RECORDINGS:

@@ -45,7 +45,7 @@ class CustomDataset(Dataset):
                              participant.meta_data["audio_quality_heavy_cough"] > 0.0]
 
     def __getitem__(self, idx):
-        input_features = self.participants[idx].heavy_cough.get_MFCCs()
+        input_features = self.participants[idx].heavy_cough.MFCCs
         if self.transform:
             input_features = self.transform(input_features)
         output_label = self.participants[idx].get_label()
