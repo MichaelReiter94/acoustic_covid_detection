@@ -1,11 +1,9 @@
 from models import BrogrammersModel, BrogrammersSequentialModel
 from evaluation_and_tracking import ModelEvaluator, IntraEpochMetricsTracker
 from datetime import datetime
-
-import librosa
+import time
 
 import numpy as np
-import matplotlib.pyplot as plt
 import pickle
 import torch.utils.data
 from torch import nn
@@ -16,10 +14,10 @@ from torch.utils.data import random_split
 from torchinfo import summary
 from torch.utils.tensorboard import SummaryWriter
 
-import os
-import pandas as pd
-# from participant import Participant
-import random
+
+RUN_SUBFOLDER = "fixed_dropout_lr=0.00001_weightDecay=0,01_batchSize=64"
+VERBOSE = False
+LOAD_FROM_DISC = False
 
 MODEL_NAME = "brogrammers_2022_10_30"
 MODEL_PATH =         f"data/Coswara_processed/models/{MODEL_NAME}.pth"
@@ -103,12 +101,13 @@ def get_accuracy(predictions, labels, threshold=0.5):
 
 ############################################# dataset setup ############################################################
 # hyperparameters
-batch_size = 32
+batch_size = 64
 learning_rate = 0.00001
-n_epochs = 10
-device = "cpu"
+n_epochs = 50
+# device = "cpu"
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-data_set = CustomDataset()
+data_set = CustomDataset(ToTensor())
 print(f"The length of the dataset = {len(data_set)}")
 n_train_samples = int(0.8 * len(data_set))
 n_val_samples = len(data_set) - int(n_train_samples)
@@ -117,14 +116,14 @@ train_set, eval_set = random_split(data_set, [n_train_samples, n_val_samples],
 # np.unique(data_set.labels[[val_set.indices]], return_counts=True)
 
 train_loader = DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True)
-eval_loader = DataLoader(dataset=eval_set, batch_size=batch_size, shuffle=True)
+# TODO check if batch_size=len(eval_set) works fine
+eval_loader = DataLoader(dataset=eval_set, batch_size=len(eval_set), shuffle=True)
 
 ################################################ CNN setup #############################################################
 my_cnn = BrogrammersModel().to(device)
 summary(my_cnn, (batch_size, 1, 15, 259))
 
-optimizer = Adam(my_cnn.parameters(), lr=learning_rate, weight_decay=0.0001)
-LOAD_FROM_DISC = False
+optimizer = Adam(my_cnn.parameters(), lr=learning_rate, weight_decay=0.01)
 if LOAD_FROM_DISC:
     try:
         my_cnn.load_state_dict(torch.load(MODEL_PATH))
@@ -155,37 +154,40 @@ loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3]))
 
 ############################################### Tensorboard Tracker ####################################################
 date = datetime.today().strftime("%Y-%m-%d")
-writer = SummaryWriter(log_dir=f"run/added_class_weights-{date}")
+writer = SummaryWriter(log_dir=f"run/{RUN_SUBFOLDER}-{date}")
 
 
 ################################################## training ############################################################
 for epoch in range(n_epochs):
-
-    print("TRAINING")
+    epoch_start = time.time()
+    # print(f"training epoch")
     my_cnn.train()
     tracker.reset()
     for i, batch in enumerate(train_loader):
         train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
-        print(f"Loss per sample = {tracker.loss[-1]:.3f} -- Accuracy:{tracker.accuracy[-1] * 100.0:.1f}% --  "
-              f"iteration {i + 1}/{len(train_loader)}")
+        if VERBOSE:
+            print(f"Loss per sample = {tracker.loss[-1]:.3f} -- Accuracy:{tracker.accuracy[-1] * 100.0:.1f}% --  "
+                  f"iteration {i + 1}/{len(train_loader)}")
     loss_t, acc_t, aucroc_t, tpr_at_95_t, auc_pr_t = tracker.get_epoch_metrics()
 
+    # print("EVALUATION")
+    with torch.no_grad():
+        my_cnn.eval()
+        tracker.reset()
+        for i, batch in enumerate(eval_loader):
+            evaluate_batch(my_cnn, batch, loss_func, tracker)
+            if VERBOSE:
+                print(f"Loss per sample = {tracker.loss[-1] :.3f} -- Accuracy:{tracker.accuracy[-1] * 100.0:.1f}% --  "
+                      f"iteration {i + 1}/{len(eval_loader)}")
+        loss_v, acc_v, aucroc_v, tpr_at_95_v, auc_pr_v = tracker.get_epoch_metrics()
 
-    print("EVALUATION")
-    my_cnn.eval()
-    tracker.reset()
-    for i, batch in enumerate(eval_loader):
-        evaluate_batch(my_cnn, batch, loss_func, tracker)
-        print(f"Loss per sample = {tracker.loss[-1] :.3f} -- Accuracy:{tracker.accuracy[-1] * 100.0:.1f}% --  "
-              f"iteration {i + 1}/{len(eval_loader)}")
-    loss_v, acc_v, aucroc_v, tpr_at_95_v, auc_pr_v = tracker.get_epoch_metrics()
+        writer.add_scalars("01_loss", {"train": loss_t, "validation": loss_v}, epoch)
+        writer.add_scalars("02_accuracy", {"train": acc_t, "validation": acc_v}, epoch)
+        writer.add_scalars("03_auc_roc", {"train": aucroc_t, "validation": aucroc_v}, epoch)
+        writer.add_scalars("04_tpr_at_95", {"train": tpr_at_95_t, "validation": tpr_at_95_v}, epoch)
+        writer.add_scalars("05_auc_precision_recall", {"train": auc_pr_t, "validation": auc_pr_v}, epoch)
 
-    writer.add_scalars("01_loss", {"train": loss_t, "validation": loss_v}, epoch)
-    writer.add_scalars("02_accuracy", {"train": acc_t, "validation": acc_v}, epoch)
-    writer.add_scalars("03_auc_roc", {"train": aucroc_t, "validation": aucroc_v}, epoch)
-    writer.add_scalars("04_tpr_at_95", {"train": tpr_at_95_t, "validation": tpr_at_95_v}, epoch)
-    writer.add_scalars("05_auc_precision_recall", {"train": auc_pr_t, "validation": auc_pr_v}, epoch)
-
+    print(f"Training + Validation epoch #{epoch} took {((time.time()-epoch_start)/60):.2f} minutes to calculate")
 
     # if epoch_loss[-1] <= min(epoch_loss):
     #     print("saving new model!")
@@ -194,6 +196,6 @@ for epoch in range(n_epochs):
 
 
 writer.close()
-print("saving new model!")
-torch.save(my_cnn.state_dict(), MODEL_PATH)
-torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
+# print("saving new model!")
+# torch.save(my_cnn.state_dict(), MODEL_PATH)
+# torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
