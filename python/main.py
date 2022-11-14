@@ -16,11 +16,17 @@ from torch.utils.data import random_split
 from torchinfo import summary
 from torch.utils.tensorboard import SummaryWriter
 
-RUN_SUBFOLDER = "fixed_dropout_lr=0.00001_weightDecay=0,01_batchSize=64"
+batch_size = 64
+learning_rate = 0.00001
+n_epochs = 50
+weight_decay = 0.01
+MODEL_NAME = "brogrammerCNN"
+date = datetime.today().strftime("%Y-%m-%d")
+
+RUN_NAME = f"{date}_{MODEL_NAME}_lr={learning_rate}_weightDecay={weight_decay}_batchSize={batch_size}_normalizedInput"
 VERBOSE = False
 LOAD_FROM_DISC = False
 
-MODEL_NAME = "brogrammers_2022_10_30"
 MODEL_PATH = f"data/Coswara_processed/models/{MODEL_NAME}.pth"
 MODEL_TRACKER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}_tracker.pickle"
 OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}_optimizer.pickle"
@@ -33,10 +39,17 @@ class CustomDataset(Dataset):
         with open("data/Coswara_processed/pickles/participant_objects.pickle", "rb") as f:
             self.participants = pickle.load(f)
         self.drop_invalid_labels()
-        # self.drop_bad_audio()
+        self.drop_bad_audio()
         self.labels = np.array([int(participant.get_label()) for participant in self.participants])
-        self.mean_mfccs = np.expand_dims(np.load("Data/Coswara_processed/pickles/mean_cough_heavy_15MFCCs.npy"), axis=1)
-        self.std_mfccs = np.expand_dims(np.load("Data/Coswara_processed/pickles/stds_cough_heavy_15MFCCs.npy"), axis=1)
+        self.mu, self.sigma = self.get_feature_statistics()
+
+    def get_feature_statistics(self):
+        # why do I have to convert it to float32???
+        mu = np.load("Data/Coswara_processed/pickles/mean_cough_heavy_15MFCCs.npy")
+        mu = np.expand_dims(mu, axis=1).astype("float32")
+        sigma = np.load("Data/Coswara_processed/pickles/stds_cough_heavy_15MFCCs.npy")
+        sigma = np.expand_dims(sigma, axis=1).astype("float32")
+        return mu, sigma
 
     def drop_invalid_labels(self):
         self.participants = [participant for participant in self.participants if participant.get_label() is not None]
@@ -46,7 +59,8 @@ class CustomDataset(Dataset):
                              participant.meta_data["audio_quality_heavy_cough"] > 0.0]
 
     def __getitem__(self, idx):
-        input_features = self.z_normalize(self.participants[idx].heavy_cough.MFCCs)
+        input_features = self.participants[idx].heavy_cough.MFCCs
+        input_features = self.z_normalize(input_features)
         if self.transform:
             input_features = self.transform(input_features)
         output_label = self.participants[idx].get_label()
@@ -59,7 +73,7 @@ class CustomDataset(Dataset):
         return self.participants[idx]
 
     def z_normalize(self, mfccs):
-        return (mfccs - self.mean_mfccs) / self.std_mfccs
+        return (mfccs - self.mu) / self.sigma
 
     def label_counts(self):
         return np.unique(self.labels, return_counts=True)
@@ -102,14 +116,9 @@ def get_accuracy(predictions, labels, threshold=0.5):
     return n_correctly_predicted.item() / len(predictions)
 
 
-# metadata = pd.read_csv("data/Coswara_processed/reformatted_metadata.csv")
-# print(metadata.covid_health_status.value_counts())
-
 # ############################################ dataset setup ###########################################################
 # hyper parameters
-batch_size = 64
-learning_rate = 0.00001
-n_epochs = 50
+
 # device = "cpu"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -118,10 +127,10 @@ print(f"The length of the dataset = {len(data_set)}")
 n_train_samples = int(0.8 * len(data_set))
 n_val_samples = len(data_set) - int(n_train_samples)
 train_set, eval_set = random_split(data_set, [n_train_samples, n_val_samples],
-                                   generator=torch.Generator().manual_seed(42))
+                                   generator=torch.Generator().manual_seed(69))
 # np.unique(data_set.labels[[val_set.indices]], return_counts=True)
 
-train_loader = DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True)
+train_loader = DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True, drop_last=True)
 # TODO check if batch_size=len(eval_set) works fine
 eval_loader = DataLoader(dataset=eval_set, batch_size=len(eval_set), shuffle=True)
 
@@ -129,7 +138,7 @@ eval_loader = DataLoader(dataset=eval_set, batch_size=len(eval_set), shuffle=Tru
 my_cnn = BrogrammersModel().to(device)
 summary(my_cnn, (batch_size, 1, 15, 259))
 
-optimizer = Adam(my_cnn.parameters(), lr=learning_rate, weight_decay=0.01)
+optimizer = Adam(my_cnn.parameters(), lr=learning_rate, weight_decay=weight_decay)
 if LOAD_FROM_DISC:
     try:
         my_cnn.load_state_dict(torch.load(MODEL_PATH))
@@ -143,28 +152,16 @@ if LOAD_FROM_DISC:
     except FileNotFoundError:
         print("no optimizer state found")
 
-#
-# try:
-#     with open(MODEL_TRACKER_PATH, "rb") as f:
-#         tracker = pickle.load(f)
-# except FileNotFoundError:
-#     tracker = ModelEvaluator()
-# tracker.train()
 tracker = IntraEpochMetricsTracker()
-# loss_func = nn.BCELoss()
 # adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
-# loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3]))
-# TODO check if this works or is necessary
 loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3])).to(device)
 
 # ############################################## Tensorboard Tracker ###################################################
-date = datetime.today().strftime("%Y-%m-%d")
-writer = SummaryWriter(log_dir=f"run/{RUN_SUBFOLDER}-{date}")
+writer = SummaryWriter(log_dir=f"run/{RUN_NAME}")
 
 # ################################################# training ###########################################################
 for epoch in range(n_epochs):
     epoch_start = time.time()
-    # print(f"training epoch")
     my_cnn.train()
     tracker.reset()
     for i, batch in enumerate(train_loader):
@@ -174,7 +171,6 @@ for epoch in range(n_epochs):
                   f"iteration {i + 1}/{len(train_loader)}")
     loss_t, acc_t, aucroc_t, tpr_at_95_t, auc_pr_t = tracker.get_epoch_metrics()
 
-    # print("EVALUATION")
     with torch.no_grad():
         my_cnn.eval()
         tracker.reset()
@@ -188,10 +184,11 @@ for epoch in range(n_epochs):
         writer.add_scalars("01_loss", {"train": loss_t, "validation": loss_v}, epoch)
         writer.add_scalars("02_accuracy", {"train": acc_t, "validation": acc_v}, epoch)
         writer.add_scalars("03_auc_roc", {"train": aucroc_t, "validation": aucroc_v}, epoch)
-        writer.add_scalars("04_tpr_at_95", {"train": tpr_at_95_t, "validation": tpr_at_95_v}, epoch)
-        writer.add_scalars("05_auc_precision_recall", {"train": auc_pr_t, "validation": auc_pr_v}, epoch)
+        # writer.add_scalars("04_tpr_at_95", {"train": tpr_at_95_t, "validation": tpr_at_95_v}, epoch)
+        # writer.add_scalars("05_auc_precision_recall", {"train": auc_pr_t, "validation": auc_pr_v}, epoch)
 
-    print(f"Training + Validation epoch #{epoch} took {((time.time() - epoch_start) / 60):.2f} minutes to calculate")
+    delta_t = time.time() - epoch_start
+    print(f"Training + Validation epoch #{epoch} took [{int(delta_t//60)}min {int(delta_t%60)}s] to calculate")
 
     # if epoch_loss[-1] <= min(epoch_loss):
     #     print("saving new model!")
