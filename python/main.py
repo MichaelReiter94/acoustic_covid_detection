@@ -16,15 +16,14 @@ from torch.utils.data import random_split
 from torchinfo import summary
 from torch.utils.tensorboard import SummaryWriter
 
-
 RUN_SUBFOLDER = "fixed_dropout_lr=0.00001_weightDecay=0,01_batchSize=64"
 VERBOSE = False
 LOAD_FROM_DISC = False
 
 MODEL_NAME = "brogrammers_2022_10_30"
-MODEL_PATH =         f"data/Coswara_processed/models/{MODEL_NAME}.pth"
+MODEL_PATH = f"data/Coswara_processed/models/{MODEL_NAME}.pth"
 MODEL_TRACKER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}_tracker.pickle"
-OPTIMIZER_PATH =     f"data/Coswara_processed/models/{MODEL_NAME}_optimizer.pickle"
+OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}_optimizer.pickle"
 
 
 class CustomDataset(Dataset):
@@ -34,8 +33,10 @@ class CustomDataset(Dataset):
         with open("data/Coswara_processed/pickles/participant_objects.pickle", "rb") as f:
             self.participants = pickle.load(f)
         self.drop_invalid_labels()
-        self.drop_bad_audio()
+        # self.drop_bad_audio()
         self.labels = np.array([int(participant.get_label()) for participant in self.participants])
+        self.mean_mfccs = np.expand_dims(np.load("Data/Coswara_processed/pickles/mean_cough_heavy_15MFCCs.npy"), axis=1)
+        self.std_mfccs = np.expand_dims(np.load("Data/Coswara_processed/pickles/stds_cough_heavy_15MFCCs.npy"), axis=1)
 
     def drop_invalid_labels(self):
         self.participants = [participant for participant in self.participants if participant.get_label() is not None]
@@ -45,7 +46,7 @@ class CustomDataset(Dataset):
                              participant.meta_data["audio_quality_heavy_cough"] > 0.0]
 
     def __getitem__(self, idx):
-        input_features = self.participants[idx].heavy_cough.MFCCs
+        input_features = self.z_normalize(self.participants[idx].heavy_cough.MFCCs)
         if self.transform:
             input_features = self.transform(input_features)
         output_label = self.participants[idx].get_label()
@@ -56,6 +57,9 @@ class CustomDataset(Dataset):
 
     def get_object(self, idx):
         return self.participants[idx]
+
+    def z_normalize(self, mfccs):
+        return (mfccs - self.mean_mfccs) / self.std_mfccs
 
     def label_counts(self):
         return np.unique(self.labels, return_counts=True)
@@ -101,8 +105,8 @@ def get_accuracy(predictions, labels, threshold=0.5):
 # metadata = pd.read_csv("data/Coswara_processed/reformatted_metadata.csv")
 # print(metadata.covid_health_status.value_counts())
 
-############################################# dataset setup ############################################################
-# hyperparameters
+# ############################################ dataset setup ###########################################################
+# hyper parameters
 batch_size = 64
 learning_rate = 0.00001
 n_epochs = 50
@@ -121,7 +125,7 @@ train_loader = DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True
 # TODO check if batch_size=len(eval_set) works fine
 eval_loader = DataLoader(dataset=eval_set, batch_size=len(eval_set), shuffle=True)
 
-################################################ CNN setup #############################################################
+# ############################################### CNN setup ############################################################
 my_cnn = BrogrammersModel().to(device)
 summary(my_cnn, (batch_size, 1, 15, 259))
 
@@ -132,7 +136,6 @@ if LOAD_FROM_DISC:
         print("model weights loaded from disc")
     except FileNotFoundError:
         print("no saved model parameters found")
-
 
     try:
         optimizer.load_state_dict(torch.load(OPTIMIZER_PATH))
@@ -154,14 +157,11 @@ tracker = IntraEpochMetricsTracker()
 # TODO check if this works or is necessary
 loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3])).to(device)
 
-
-
-############################################### Tensorboard Tracker ####################################################
+# ############################################## Tensorboard Tracker ###################################################
 date = datetime.today().strftime("%Y-%m-%d")
 writer = SummaryWriter(log_dir=f"run/{RUN_SUBFOLDER}-{date}")
 
-
-################################################## training ############################################################
+# ################################################# training ###########################################################
 for epoch in range(n_epochs):
     epoch_start = time.time()
     # print(f"training epoch")
@@ -191,13 +191,12 @@ for epoch in range(n_epochs):
         writer.add_scalars("04_tpr_at_95", {"train": tpr_at_95_t, "validation": tpr_at_95_v}, epoch)
         writer.add_scalars("05_auc_precision_recall", {"train": auc_pr_t, "validation": auc_pr_v}, epoch)
 
-    print(f"Training + Validation epoch #{epoch} took {((time.time()-epoch_start)/60):.2f} minutes to calculate")
+    print(f"Training + Validation epoch #{epoch} took {((time.time() - epoch_start) / 60):.2f} minutes to calculate")
 
     # if epoch_loss[-1] <= min(epoch_loss):
     #     print("saving new model!")
     #     torch.save(my_cnn.state_dict(), MODEL_PATH)
     #     torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
-
 
 writer.close()
 # print("saving new model!")

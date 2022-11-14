@@ -32,7 +32,7 @@ class AudioRecording:
         return mfccs
 
     def get_audio(self, processed=True):
-        """ Prcessing of original audio if 'processed=True':\n
+        """ Processing of original audio if 'processed=True':\n
                 - Silent leading and trailing parts are trimmed\n
                 - the file is resampled to samplerate defined within the class\n
                 - amplitude is normalized\n
@@ -81,4 +81,3 @@ class AudioRecording:
         sd.wait()
 
 # TODO: detect if clipping was present (redundant because we already have a measure for the audio quality?
-
