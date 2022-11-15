@@ -20,7 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # <editor-fold desc="function definitions">
 class Params:
-    def __init__(self, batch_size=256, lr=0.0000001, n_epochs=20, weight_decay=0.01, verbose=True):
+    def __init__(self, batch_size=64, lr=0.000001, n_epochs=10, weight_decay=0.01, verbose=True):
         self.batch_size = batch_size
         self.lr = lr
         self.n_epochs = n_epochs
@@ -122,18 +122,18 @@ def get_optimizer(model_name, verbose=True, load_from_disc=False):
 
 def write_metrics_to_tensorboard(mode):
     loss, acc, aucroc, tpr_at_95, auc_pr = tracker.get_epoch_metrics()
-    writer.add_scalar(f"{mode}/01_loss", loss, epoch)
-    writer.add_scalar(f"{mode}/02_accuracy", acc, epoch)
-    writer.add_scalar(f"{mode}/03_AUC-ROC", aucroc, epoch)
-    writer.add_scalar(f"{mode}/04_true_positives_at_95", tpr_at_95, epoch)
-    writer.add_scalar(f"{mode}/05_AUC-precision-recall", auc_pr, epoch)
+    writer.add_scalar(f"01_loss/{mode}", loss, epoch)
+    writer.add_scalar(f"02_accuracy/{mode}", acc, epoch)
+    writer.add_scalar(f"03_AUC-ROC/{mode}", aucroc, epoch)
+    # writer.add_scalar(f"{mode}/04_true_positives_at_95", tpr_at_95, epoch)
+    # writer.add_scalar(f"{mode}/05_AUC-precision-recall", auc_pr, epoch)
 # </editor-fold>
 
 
 VERBOSE = False
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False
-p = Params(batch_size=64, lr=0.0000001, n_epochs=5, weight_decay=0.01, verbose=VERBOSE)
+p = Params(batch_size=128, lr=0.0000001, n_epochs=200, weight_decay=0.01, verbose=VERBOSE)
 MODEL_NAME = "brogrammers"
 RUN_COMMENT = "test_tensorboard_structure"
 
@@ -148,20 +148,17 @@ learning_rates = [1e-4, 1e-5, 1e-6]
 for lr in learning_rates:
     p.lr = lr
     writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/lr={p.lr}")
-
     my_cnn = get_model(MODEL_NAME, data_set, load_from_disc=LOAD_FROM_DISC, verbose=VERBOSE)
     optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC, verbose=VERBOSE)
     tracker = IntraEpochMetricsTracker()
     # adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
     loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3])).to(p.device)
-
 # ################################################# training ###########################################################
     for epoch in range(p.n_epochs):
         epoch_start = time.time()
         tracker.reset()
         for i, batch in enumerate(train_loader):
             train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
-
         write_metrics_to_tensorboard(mode="train")
 
         with torch.no_grad():
