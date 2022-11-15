@@ -20,7 +20,7 @@ class CustomDataset(Dataset):
         with open("data/Coswara_processed/pickles/participant_objects.pickle", "rb") as f:
             self.participants = pickle.load(f)
         self.drop_invalid_labels()
-        # self.drop_bad_audio()
+        self.drop_bad_audio()
         self.labels = np.array([int(participant.get_label()) for participant in self.participants])
         self.mu, self.sigma = get_feature_statistics()
         if verbose:

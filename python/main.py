@@ -4,7 +4,6 @@ from datasets import CustomDataset
 from datetime import datetime
 import time
 import librosa
-
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
@@ -68,7 +67,7 @@ def get_data_loaders(dataset, percent_train_set=0.8, rand_seed=None):
     rng = torch.Generator()
     if rand_seed is not None:
         rng.manual_seed(rand_seed)
-    train_set, eval_set = random_split(dataset,[n_train_samples, n_val_samples], generator=rng)
+    train_set, eval_set = random_split(dataset, [n_train_samples, n_val_samples], generator=rng)
     train = DataLoader(dataset=train_set, batch_size=p.batch_size, shuffle=True, drop_last=True)
     val = DataLoader(dataset=eval_set, batch_size=len(eval_set))
     return train, val
@@ -99,7 +98,7 @@ def get_model(model_name, dataset=None, verbose=True, load_from_disc=False):
     return my_model
 
 
-def get_optimizer(model_name, verbose=True, load_from_disc=False):
+def get_optimizer(model_name, load_from_disc=False):
     my_optimizer = Adam(my_cnn.parameters(), lr=p.lr, weight_decay=p.weight_decay)
     if load_from_disc:
         try:
@@ -122,12 +121,12 @@ def write_metrics_to_tensorboard(mode):
 
 # </editor-fold>
 
-# ##############################################  manual setup  #####################################################
+# ###############################################  manual setup  #######################################################
 parameters = dict(
-    batch_size=[64, 128],
-    lr=[1e-5, 1e-6],
-    n_epochs=[5],
-    weight_decay=[0.01])
+    batch_size=[32, 64, 128],
+    lr=[1e-5, 1e-6, 1e-7],
+    n_epochs=[500],
+    weight_decay=[0.1, 0.01, 0.001])
 
 MODEL_NAME = "brogrammers"
 RUN_COMMENT = "test_run_builder"
@@ -146,7 +145,7 @@ for p in get_parameter_combinations(parameters):
     train_loader, eval_loader = get_data_loaders(data_set, percent_train_set=0.8)
     writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
     my_cnn = get_model(MODEL_NAME, data_set, load_from_disc=LOAD_FROM_DISC, verbose=VERBOSE)
-    optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC, verbose=VERBOSE)
+    optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
     tracker = IntraEpochMetricsTracker()
     # adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
     loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3])).to(device)
