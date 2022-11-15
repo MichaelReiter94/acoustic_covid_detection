@@ -16,33 +16,24 @@ from torchvision.transforms import ToTensor
 from torch.utils.data import random_split
 from torchinfo import summary
 from torch.utils.tensorboard import SummaryWriter
-
+from collections import namedtuple
+from itertools import product
 
 # <editor-fold desc="function definitions">
-class Params:
-    def __init__(self, batch_size=64, lr=0.000001, n_epochs=10, weight_decay=0.01, verbose=True):
-        self.batch_size = batch_size
-        self.lr = lr
-        self.n_epochs = n_epochs
-        self.weight_decay = weight_decay
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        if verbose:
-            print(self)
 
-    def __str__(self):
-        out = "Parameters for this Run are:\n"
-        out += f"Batch Size: {self.batch_size}\n"
-        out += f"Learning Rate: {self.lr}\n"
-        out += f"Number of Epochs: {self.n_epochs}\n"
-        out += f"Weight Decay: {self.weight_decay}\n"
-        out += f"Training is done on '{self.device}'\n"
-        return out
+
+def get_parameter_combinations(param_dict):
+    Run = namedtuple("Run", param_dict.keys())
+    runs = []
+    for run_combination in product(*param_dict.values()):
+        runs.append(Run(*run_combination))
+    return runs
 
 
 def train_on_batch(model, current_batch, current_loss_func, current_optimizer, my_tracker):
     model.train()
     input_data, label = current_batch
-    input_data, label = input_data.to(p.device), label.to(p.device)
+    input_data, label = input_data.to(device), label.to(device)
     prediction = torch.squeeze(model(input_data))
     loss = current_loss_func(prediction, label)
     accuracy = get_accuracy(prediction, label)
@@ -57,7 +48,7 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
 def evaluate_batch(model, current_batch, loss_function, my_tracker):
     model.eval()
     input_data, label = current_batch
-    input_data, label = input_data.to(p.device), label.to(p.device)
+    input_data, label = input_data.to(device), label.to(device)
     prediction = torch.squeeze(model(input_data))
     loss = loss_function(prediction, label)
     accuracy = get_accuracy(prediction, label)
@@ -88,7 +79,7 @@ def get_model(model_name, dataset=None, verbose=True, load_from_disc=False):
         "brogrammers": BrogrammersModel,
         "brogrammers_old": BrogrammersSequentialModel
     }
-    my_model = model_dict[model_name]().to(p.device)
+    my_model = model_dict[model_name]().to(device)
 
     # print model summary
     if verbose and dataset is not None:
@@ -125,34 +116,40 @@ def write_metrics_to_tensorboard(mode):
     writer.add_scalar(f"01_loss/{mode}", loss, epoch)
     writer.add_scalar(f"02_accuracy/{mode}", acc, epoch)
     writer.add_scalar(f"03_AUC-ROC/{mode}", aucroc, epoch)
-    # writer.add_scalar(f"{mode}/04_true_positives_at_95", tpr_at_95, epoch)
-    # writer.add_scalar(f"{mode}/05_AUC-precision-recall", auc_pr, epoch)
+    writer.add_scalar(f"{mode}/04_true_positives_at_95", tpr_at_95, epoch)
+    writer.add_scalar(f"{mode}/05_AUC-precision-recall", auc_pr, epoch)
+
+
 # </editor-fold>
 
+# ##############################################  manual setup  #####################################################
+parameters = dict(
+    batch_size=[64, 128],
+    lr=[1e-5, 1e-6],
+    n_epochs=[5],
+    weight_decay=[0.01])
 
+MODEL_NAME = "brogrammers"
+RUN_COMMENT = "test_run_builder"
 VERBOSE = False
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False
-p = Params(batch_size=128, lr=0.0000001, n_epochs=200, weight_decay=0.01, verbose=VERBOSE)
-MODEL_NAME = "brogrammers"
-RUN_COMMENT = "test_tensorboard_structure"
-
-date = datetime.today().strftime("%Y-%m-%d")
-RUN_NAME = f"{date}_{MODEL_NAME}_{RUN_COMMENT}"
 
 # ############################################ setup ###################################################################
+device = "cuda" if torch.cuda.is_available() else "cpu"
+date = datetime.today().strftime("%Y-%m-%d")
+RUN_NAME = f"{date}_{MODEL_NAME}_{RUN_COMMENT}"
 data_set = CustomDataset(ToTensor(), verbose=VERBOSE)
-train_loader, eval_loader = get_data_loaders(data_set, percent_train_set=0.8)
 
-learning_rates = [1e-4, 1e-5, 1e-6]
-for lr in learning_rates:
-    p.lr = lr
-    writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/lr={p.lr}")
+for p in get_parameter_combinations(parameters):
+    # p.lr = lr
+    train_loader, eval_loader = get_data_loaders(data_set, percent_train_set=0.8)
+    writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
     my_cnn = get_model(MODEL_NAME, data_set, load_from_disc=LOAD_FROM_DISC, verbose=VERBOSE)
     optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC, verbose=VERBOSE)
     tracker = IntraEpochMetricsTracker()
     # adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
-    loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3])).to(p.device)
+    loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3])).to(device)
 # ################################################# training ###########################################################
     for epoch in range(p.n_epochs):
         epoch_start = time.time()
