@@ -21,6 +21,7 @@ class BrogrammersModel(nn.Module):
         self.dense1 = nn.Linear(in_features=((TIMESTEPS-2)//2-1) * ((MFCC_BINS - 2)//2-1) * n_filters, out_features=256)
         self.dense2 = nn.Linear(in_features=256, out_features=128)
         self.dense3 = nn.Linear(in_features=128, out_features=1)
+        print("loading brogrammers module/class based model")
 
     def forward(self, input_data):
         x = F.relu(self.conv1(input_data))
@@ -44,6 +45,7 @@ class BrogrammersSequentialModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.input_size = (TIMESTEPS, MFCC_BINS, 1)
+
         n_filters = 64
 
         self.model = nn.Sequential(
@@ -81,6 +83,8 @@ class BrogrammersSequentialModel(nn.Module):
             nn.Linear(in_features=128, out_features=1),
             nn.Sigmoid()
         )
+        print("loading brogrammers sequential model")
+
 
     def forward(self, input_data):
         prediction = self.model(input_data)
