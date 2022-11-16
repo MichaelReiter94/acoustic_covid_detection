@@ -115,8 +115,8 @@ def write_metrics_to_tensorboard(mode):
     writer.add_scalar(f"01_loss/{mode}", loss, epoch)
     writer.add_scalar(f"02_accuracy/{mode}", acc, epoch)
     writer.add_scalar(f"03_AUC-ROC/{mode}", aucroc, epoch)
-    writer.add_scalar(f"{mode}/04_true_positives_at_95", tpr_at_95, epoch)
-    writer.add_scalar(f"{mode}/05_AUC-precision-recall", auc_pr, epoch)
+    writer.add_scalar(f"04_true_positives_at_95/{mode}", tpr_at_95, epoch)
+    writer.add_scalar(f"05_AUC-precision-recall/{mode}", auc_pr, epoch)
 
 
 # </editor-fold>
