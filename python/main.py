@@ -1,5 +1,6 @@
 from models import BrogrammersModel, BrogrammersSequentialModel
 from evaluation_and_tracking import IntraEpochMetricsTracker
+from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift
 from datasets import CustomDataset
 from datetime import datetime
 import time
@@ -11,7 +12,7 @@ import torch.utils.data
 from torch import nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from torchvision.transforms import ToTensor
+from torchvision.transforms import ToTensor, Compose
 from torch.utils.data import random_split
 from torchinfo import summary
 from torch.utils.tensorboard import SummaryWriter
@@ -111,47 +112,56 @@ def get_optimizer(model_name, load_from_disc=False):
 
 
 def write_metrics_to_tensorboard(mode):
-    loss, acc, aucroc, tpr_at_95, auc_pr = tracker.get_epoch_metrics()
-    writer.add_scalar(f"01_loss/{mode}", loss, epoch)
-    writer.add_scalar(f"02_accuracy/{mode}", acc, epoch)
-    writer.add_scalar(f"03_AUC-ROC/{mode}", aucroc, epoch)
-    writer.add_scalar(f"{mode}/04_true_positives_at_95", tpr_at_95, epoch)
-    writer.add_scalar(f"{mode}/05_AUC-precision-recall", auc_pr, epoch)
+    if TRACK_METRICS:
+        loss, acc, aucroc, tpr_at_95, auc_pr = tracker.get_epoch_metrics()
+        writer.add_scalar(f"01_loss/{mode}", loss, epoch)
+        writer.add_scalar(f"02_accuracy/{mode}", acc, epoch)
+        writer.add_scalar(f"03_AUC-ROC/{mode}", aucroc, epoch)
+        writer.add_scalar(f"{mode}/04_true_positives_at_95", tpr_at_95, epoch)
+        writer.add_scalar(f"{mode}/05_AUC-precision-recall", auc_pr, epoch)
 
 
 # </editor-fold>
 
 # ###############################################  manual setup  #######################################################
 parameters = dict(
-    batch_size=[32, 64, 128],
-    lr=[1e-5, 1e-6, 1e-7],
-    n_epochs=[500],
-    weight_decay=[0.1, 0.01, 0.001])
+    batch_size=[128],
+    lr=[1e-5+1e-8],
+    n_epochs=[100],
+    weight_decay=[1e-5])
+
 
 MODEL_NAME = "brogrammers"
-RUN_COMMENT = "test_run_builder"
-VERBOSE = False
+RUN_COMMENT = "testing_basic_augmentations"
+VERBOSE = True
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False
+TRACK_METRICS = True
 
 # ############################################ setup ###################################################################
 device = "cuda" if torch.cuda.is_available() else "cpu"
 date = datetime.today().strftime("%Y-%m-%d")
 RUN_NAME = f"{date}_{MODEL_NAME}_{RUN_COMMENT}"
+transforms = Compose([
+    ToTensor(),
+    AddGaussianNoise(0, 0.1),
+    CyclicTemporalShift()
+])
 data_set = CustomDataset(ToTensor(), verbose=VERBOSE)
 
 for p in get_parameter_combinations(parameters):
     # p.lr = lr
     train_loader, eval_loader = get_data_loaders(data_set, percent_train_set=0.8)
-    writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
+    if TRACK_METRICS:
+        writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
     my_cnn = get_model(MODEL_NAME, data_set, load_from_disc=LOAD_FROM_DISC, verbose=VERBOSE)
     optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
     tracker = IntraEpochMetricsTracker()
     # adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
     loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3])).to(device)
 # ################################################# training ###########################################################
+    epoch_start = time.time()
     for epoch in range(p.n_epochs):
-        epoch_start = time.time()
         tracker.reset()
         for i, batch in enumerate(train_loader):
             train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
@@ -163,11 +173,12 @@ for p in get_parameter_combinations(parameters):
                 evaluate_batch(my_cnn, batch, loss_func, tracker)
             write_metrics_to_tensorboard(mode="eval")
 
+    if VERBOSE or True:
         delta_t = time.time() - epoch_start
-        if VERBOSE or True:
-            print(f"Epoch #{epoch} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
+        print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
 
-    writer.close()
+    if TRACK_METRICS:
+        writer.close()
     if SAVE_TO_DISC:
         print("saving new model!")
         MODEL_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/model.pth"

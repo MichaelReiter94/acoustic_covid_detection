@@ -9,16 +9,17 @@ class BrogrammersModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.input_size = (TIMESTEPS, MFCC_BINS, 1)
-        n_filters = 64
+        n_filters1 = 64
+        n_filters2 = 32
 
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=n_filters, kernel_size=3)
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=n_filters1, kernel_size=3)
         # TODO the stride of the max-pool layer might be wrong... (not specified in paper but no arguments means
         #  possibly that the stride = the kernel size
         # self.max-pool = nn.MaxPool2d(kernel_size=2, stride=1)
         self.maxpool = nn.MaxPool2d(kernel_size=2)
-        self.conv2 = nn.Conv2d(in_channels=n_filters, out_channels=n_filters, kernel_size=2)
-        self.batch_norm2d = nn.BatchNorm2d(n_filters)
-        self.dense1 = nn.Linear(in_features=((TIMESTEPS-2)//2-1) * ((MFCC_BINS - 2)//2-1) * n_filters, out_features=256)
+        self.conv2 = nn.Conv2d(in_channels=n_filters1, out_channels=n_filters2, kernel_size=2)
+        self.batch_norm2d = nn.BatchNorm2d(n_filters2)
+        self.dense1 = nn.Linear(in_features=((TIMESTEPS-2)//2-1) * ((MFCC_BINS - 2)//2-1) * n_filters2, out_features=256)
         self.dense2 = nn.Linear(in_features=256, out_features=128)
         self.dense3 = nn.Linear(in_features=128, out_features=1)
         print("loading brogrammers module/class based model")
