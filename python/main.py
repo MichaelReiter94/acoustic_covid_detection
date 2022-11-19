@@ -123,15 +123,22 @@ def write_metrics_to_tensorboard(mode):
 # </editor-fold>
 
 # ###############################################  manual setup  #######################################################
+n_epochs = 75
+
 parameters = dict(
-    batch_size=[128],
-    lr=[1e-5+1e-8],
-    n_epochs=[100],
-    weight_decay=[1e-5])
+    batch_size=[32, 64],
+    lr=[1e-4],
+    weight_decay=[1e-4],
+    augmentations=[True, False]
+)
+transforms = Compose([
+    ToTensor(),
+])
+
 
 
 MODEL_NAME = "brogrammers"
-RUN_COMMENT = "testing_basic_augmentations"
+RUN_COMMENT = "testing_basic_augmentations_v2"
 VERBOSE = True
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False
@@ -141,32 +148,33 @@ TRACK_METRICS = True
 device = "cuda" if torch.cuda.is_available() else "cpu"
 date = datetime.today().strftime("%Y-%m-%d")
 RUN_NAME = f"{date}_{MODEL_NAME}_{RUN_COMMENT}"
-transforms = Compose([
-    ToTensor(),
-    AddGaussianNoise(0, 0.1),
-    CyclicTemporalShift()
-])
 data_set = CustomDataset(ToTensor(), verbose=VERBOSE)
 
 for p in get_parameter_combinations(parameters):
-    # p.lr = lr
+    if p.augmentations:
+        data_set.augmentations = Compose([AddGaussianNoise(0, 0.15), CyclicTemporalShift()])
+    else:
+        data_set.augmentations = None
+
     train_loader, eval_loader = get_data_loaders(data_set, percent_train_set=0.8)
     if TRACK_METRICS:
         writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
-    my_cnn = get_model(MODEL_NAME, data_set, load_from_disc=LOAD_FROM_DISC, verbose=VERBOSE)
+    my_cnn = get_model(MODEL_NAME, data_set, load_from_disc=LOAD_FROM_DISC, verbose=False)
     optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
     tracker = IntraEpochMetricsTracker()
     # adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
     loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3])).to(device)
 # ################################################# training ###########################################################
     epoch_start = time.time()
-    for epoch in range(p.n_epochs):
+    for epoch in range(n_epochs):
         tracker.reset()
+        data_set.use_augmentations = True
         for i, batch in enumerate(train_loader):
             train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
         write_metrics_to_tensorboard(mode="train")
 
         with torch.no_grad():
+            data_set.use_augmentations = False
             tracker.reset()
             for i, batch in enumerate(eval_loader):
                 evaluate_batch(my_cnn, batch, loss_func, tracker)
