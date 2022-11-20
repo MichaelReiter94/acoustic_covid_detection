@@ -4,32 +4,41 @@ import sounddevice as sd
 import numpy as np
 import librosa.display
 import matplotlib.pyplot as plt
+from audiomentations import Compose, AddGaussianNoise, PitchShift, HighPassFilter, Gain, Shift, TimeStretch, Trim
 
 
 class AudioRecording:
 
-    def __init__(self, data_path, type_of_recording):
+    def __init__(self, data_path, type_of_recording, augmentations=None):
         # are all files .wav?
         self.file_path = f"{os.path.join(data_path, type_of_recording)}.wav".replace("\\", "/")
         self.recording_type = type_of_recording
+        self.augmentations = augmentations
         self.target_sample_rate = 22050
         self.target_duration_seconds = 6
-        self.n_fft = 2048
         self.hop_size = 512
-        self.n_MFCCs = 15
+        self.nfft = 2048
+
         self.n_samples_target = self.target_sample_rate * self.target_duration_seconds
+        self.target_time_steps = int(self.n_samples_target // self.hop_size + 1)
+
         self.original_sample_rate = None
         self.original_duration = None
         self.original_duration_trimmed_silence = None
-        self.MFCCs = self.get_MFCCs()
 
-    def get_MFCCs(self):
-        audio, sr = self.get_audio(processed=True)
-        mfccs = librosa.feature.mfcc(y=audio,
-                                     n_fft=self.n_fft,
-                                     hop_length=self.hop_size,
-                                     n_mfcc=self.n_MFCCs)
-        return mfccs
+        audio, sample_rate = self.get_audio(processed=True)
+        if self.augmentations is not None:
+            audio = self.augmentations(audio, sample_rate)
+
+        self.MFCCs = librosa.feature.mfcc(y=audio, n_fft=self.nfft, hop_length=self.hop_size, n_mfcc=15)
+
+    # def get_MFCCs(self, audio):
+    #     # audio, sr = self.get_audio(processed=True)
+    #     n_fft = 2048
+    #     hop_size = 512
+    #     n_MFCCs = 15
+    #     mfccs = librosa.feature.mfcc(y=audio, n_fft=n_fft, hop_length=hop_size, n_mfcc=n_MFCCs)
+    #     return mfccs
 
     def get_audio(self, processed=True):
         """ Processing of original audio if 'processed=True':\n
@@ -39,11 +48,12 @@ class AudioRecording:
                 - cut or padded to specified length"""
         # TODO this is redundant if the instance was created now. only older objects loaded from disc still have a
         #  wrong format
-        self.file_path = self.file_path.replace("\\", "/")
+        # self.file_path = self.file_path.replace("\\", "/")
 
         audio, file_sample_rate = librosa.load(self.file_path, sr=None)
         self.original_duration = round(len(audio) / file_sample_rate, 2)
         self.original_sample_rate = file_sample_rate
+
         if processed:
             # resample
             audio = librosa.resample(y=audio, orig_sr=file_sample_rate, target_sr=self.target_sample_rate)
@@ -54,15 +64,15 @@ class AudioRecording:
             # cut or pad to self.target_duration_seconds
             if len(audio) < self.n_samples_target:
                 audio = np.pad(audio, (0, self.n_samples_target - len(audio)))
-            elif len(audio) > self.n_samples_target:
-                audio = audio[:self.n_samples_target]
-            # normalize amplitude
-            audio = audio / np.max(np.abs(audio))
+            # elif len(audio) > self.n_samples_target:
+            #     audio = audio[:self.n_samples_target]
+            # normalize amplitude??
+            # audio = audio / np.max(np.abs(audio))
         return audio, file_sample_rate
 
     def show_waveform(self, processed=True):
         plt.figure()
-        audio, sr = self.get_audio(processed)
+        audio, sr = self.get_audio(processed=True)
         librosa.display.waveshow(audio, sr=sr)
         plt.xlabel("Time")
         plt.ylabel("Amplitude")
@@ -77,6 +87,15 @@ class AudioRecording:
 
     def play_audio(self, processed=True):
         data, sr = self.get_audio(processed)
+        sd.play(data, sr)
+        sd.wait()
+
+    def play_randomly_augmented_audio(self):
+        data, sr = self.get_audio(processed=True)
+        if self.augmentations is not None:
+            data = self.augmentations(data, sr)
+        else:
+            print("There are no augmentations specified for this instance. This recording is original.")
         sd.play(data, sr)
         sd.wait()
 
