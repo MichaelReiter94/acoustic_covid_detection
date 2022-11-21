@@ -112,24 +112,26 @@ def get_optimizer(model_name, load_from_disc=False):
 
 
 def write_metrics_to_tensorboard(mode):
-    loss, acc, aucroc, tpr_at_95, auc_pr = tracker.get_epoch_metrics()
-    writer.add_scalar(f"01_loss/{mode}", loss, epoch)
-    writer.add_scalar(f"02_accuracy/{mode}", acc, epoch)
-    writer.add_scalar(f"03_AUC-ROC/{mode}", aucroc, epoch)
-    writer.add_scalar(f"04_true_positives_at_95/{mode}", tpr_at_95, epoch)
-    writer.add_scalar(f"05_AUC-precision-recall/{mode}", auc_pr, epoch)
+    if TRACK_METRICS:
+        loss, acc, aucroc, tpr_at_95, auc_pr = tracker.get_epoch_metrics()
+        writer.add_scalar(f"01_loss/{mode}", loss, epoch)
+        writer.add_scalar(f"02_accuracy/{mode}", acc, epoch)
+        writer.add_scalar(f"03_AUC-ROC/{mode}", aucroc, epoch)
+        writer.add_scalar(f"04_true_positives_at_95/{mode}", tpr_at_95, epoch)
+        writer.add_scalar(f"05_AUC-precision-recall/{mode}", auc_pr, epoch)
 
 
 # </editor-fold>
 
 # ###############################################  manual setup  #######################################################
-n_epochs = 75
+n_epochs = 30
 
 parameters = dict(
     batch_size=[32, 64],
     lr=[1e-4],
     weight_decay=[1e-4],
-    augmentations=[True, False]
+    # augmentations=[True, False],
+    noise_sigma=[0, 0.15]
 )
 transforms = Compose([
     ToTensor(),
@@ -138,7 +140,7 @@ transforms = Compose([
 
 
 MODEL_NAME = "brogrammers"
-RUN_COMMENT = "testing_basic_augmentations_v2"
+RUN_COMMENT = "testing_data_from_new_audioProcessing_script"
 VERBOSE = True
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False
@@ -151,8 +153,8 @@ RUN_NAME = f"{date}_{MODEL_NAME}_{RUN_COMMENT}"
 data_set = CustomDataset(ToTensor(), verbose=VERBOSE)
 
 for p in get_parameter_combinations(parameters):
-    if p.augmentations:
-        data_set.augmentations = Compose([AddGaussianNoise(0, 0.15), CyclicTemporalShift()])
+    if p.noise_sigma > 0:
+        data_set.augmentations = Compose([AddGaussianNoise(0, p.noise_sigma), CyclicTemporalShift()])
     else:
         data_set.augmentations = None
 

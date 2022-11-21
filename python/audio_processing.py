@@ -1,6 +1,6 @@
 # <editor-fold desc="Imports">
 import os
-from audiomentations import Compose, AddGaussianNoise, PitchShift, HighPassFilter, Gain, Shift, TimeStretch, Trim
+from audiomentations import Compose, AddGaussianNoise, PitchShift, Gain, TimeStretch
 
 path = os.environ.get("PATH")
 additional_path = "C:\\Users\\micha\\anaconda3\\envs\\ai38;" \

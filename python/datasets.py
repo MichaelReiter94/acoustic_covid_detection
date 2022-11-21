@@ -15,11 +15,12 @@ def get_feature_statistics():
 
 class CustomDataset(Dataset):
     def __init__(self, transform=None, augmentations=None, verbose=True):
+        self.n_timesteps = 259
         self.transform = transform
         self.augmentations = augmentations
         self.use_augmentations = True
         # with open("data/Coswara_processed/pickles/participant_objects_subset.pickle", "rb") as f:
-        with open("data/Coswara_processed/pickles/participant_objects.pickle", "rb") as f:
+        with open("data/Coswara_processed/pickles/participant_objects_new.pickle", "rb") as f:
             self.participants = pickle.load(f)
         self.drop_invalid_labels()
         self.drop_bad_audio()
@@ -43,6 +44,7 @@ class CustomDataset(Dataset):
         if self.use_augmentations and self.augmentations is not None:
             input_features = self.augmentations(input_features)
 
+        input_features = input_features[:, :, :self.n_timesteps]
         output_label = self.participants[idx].get_label()
         return input_features, torch.tensor(output_label).float()
 

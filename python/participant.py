@@ -32,4 +32,8 @@ class Participant:
         This label is derived from the 'covid_health_status' from the coswara dataset which includes several
         (sub-)categories"""
         # the processing was done before already and entered in the csv file
-        return int(self.meta_data["covid_label"])
+        try:
+            label = int(self.meta_data["covid_label"])
+        except ValueError:
+            label = None
+        return label
