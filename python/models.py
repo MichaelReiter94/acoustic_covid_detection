@@ -1,14 +1,15 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-TIMESTEPS = 259
-MFCC_BINS = 15
+
 
 
 class BrogrammersModel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.input_size = (TIMESTEPS, MFCC_BINS, 1)
+        TIMESTEPS = 259
+        MFCC_BINS = 15
+        self.input_size = (1, MFCC_BINS, TIMESTEPS)
         n_filters1 = 64
         n_filters2 = 32
 
@@ -45,7 +46,9 @@ class BrogrammersModel(nn.Module):
 class BrogrammersSequentialModel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.input_size = (TIMESTEPS, MFCC_BINS, 1)
+        TIMESTEPS = 259
+        MFCC_BINS = 15
+        self.input_size = (1, MFCC_BINS, TIMESTEPS)
 
         n_filters = 64
 
