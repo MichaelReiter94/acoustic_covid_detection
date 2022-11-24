@@ -172,20 +172,21 @@ def write_metrics_to_tensorboard(mode):
 # </editor-fold>
 
 # ###############################################  manual setup  #######################################################
-n_epochs = 50
+n_epochs = 300
 
 parameters = dict(
-    batch_size=[32],
-    lr=[1e-4],
+    batch_size=[16],
+    lr=[1e-5],
     weight_decay=[1e-4],
-    noise_sigma=[0, 0.1],
-    cyclic_shift=[True, False]
+    noise_sigma=[0],
+    cyclic_shift=[True],
+    pos_class_weighting=[1]
 )
 transforms = None
-augmentations = Compose([AddGaussianNoise(0, 0.15), CyclicTemporalShift()])
+augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
 MODEL_NAME = "brogrammers"
-RUN_COMMENT = "added_time_domain_augmentations_with_class_oversampling"
+RUN_COMMENT = "super_small_batch_sizes"
 VERBOSE = True
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False
@@ -198,7 +199,7 @@ RUN_NAME = f"{date}_{MODEL_NAME}_{RUN_COMMENT}"
 
 # data_set = CustomDataset(ToTensor(), verbose=VERBOSE)
 train_set, val_set = get_datasets(split_ratio=0.8, transform=transforms,
-                                  train_augmentation=augmentations,  random_seed=734567986)
+                                  train_augmentation=augmentations,  random_seed=None)
 
 for p in get_parameter_combinations(parameters):
 
@@ -220,7 +221,8 @@ for p in get_parameter_combinations(parameters):
     optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
     tracker = IntraEpochMetricsTracker()
     # adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
-    loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3])).to(device)
+    loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.pos_class_weighting])).to(device)
+    # loss_func = nn.BCEWithLogitsLoss().to(device)
     # ################################################ training ########################################################
 
     epoch_start = time.time()
