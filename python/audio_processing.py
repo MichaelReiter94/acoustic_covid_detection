@@ -59,15 +59,15 @@ def create_participant_objects(save_to: str, augmentations=None, augmentations_p
 
 
 time_domain_augmentations = Compose([
-    AddGaussianNoise(min_amplitude=0.0001, max_amplitude=0.01, p=0.8),
-    PitchShift(min_semitones=-1, max_semitones=1, p=0.8),
-    TimeStretch(min_rate=0.85, max_rate=1.15, leave_length_unchanged=False, p=0.8),
-    Gain(min_gain_in_db=-30, max_gain_in_db=6, p=0.8)
+    AddGaussianNoise(min_amplitude=0.0001, max_amplitude=0.02, p=0.8),
+    PitchShift(min_semitones=-2, max_semitones=2, p=0.8),
+    TimeStretch(min_rate=0.9, max_rate=1.1, leave_length_unchanged=False, p=0.8),
+    Gain(min_gain_in_db=-36, max_gain_in_db=12, p=0.8)
 ])
 
 participant_ids = os.listdir("data/Coswara_processed/Recordings")
 metadata = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
 
-create_participant_objects(save_to="participants_oversampledCovidPositives_validLabelsOnly",
+create_participant_objects(save_to="2022-11-25-added_logmel224x224",
                            augmentations=time_domain_augmentations,
-                           augmentations_per_label=(1, 4))
+                           augmentations_per_label=(1, 3))

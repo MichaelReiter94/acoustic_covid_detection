@@ -2,7 +2,7 @@ from audio_recording import AudioRecording
 import os
 import pandas as pd
 
-# not necessary anymore.. only here to remember which labels were chosen to be positive or negative
+# not necessary anymore... only here to remember which labels were chosen to be positive or negative
 NEGATIVE_LABELS = ["healthy", "resp_illness_not_identified", "no_resp_illness_exposed"]
 POSITIVE_LABELS = ["positive_mild", "positive_moderate", "positive_asymp"]
 UNKNOWN_LABELS = ["under_validation", "recovered_full"]
