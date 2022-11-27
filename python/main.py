@@ -1,10 +1,11 @@
 from models import BrogrammersModel, BrogrammersSequentialModel
 from evaluation_and_tracking import IntraEpochMetricsTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift
-from datasets import CustomDataset
+from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset
 import librosa
 import matplotlib.pyplot as plt
 from torch.utils.data import random_split
+from torchvision.models import resnet18
 from datetime import datetime
 import time
 import numpy as np
@@ -20,6 +21,7 @@ from collections import namedtuple
 from itertools import product
 import os
 import random
+
 
 # <editor-fold desc="function definitions">
 
@@ -77,7 +79,7 @@ def get_ids_of(participants_filename):
             ids_neg.append(part.id)
         else:
             ids_invalid.append(part.id)
-    return ids_neg, ids_pos, ids_invalid
+    return ids_pos, ids_neg, ids_invalid
 
 
 def randomly_split_list_into_two(input_list, ratio=0.8, random_seed=None):
@@ -87,33 +89,66 @@ def randomly_split_list_into_two(input_list, ratio=0.8, random_seed=None):
     return input_list_temp[:split_index], input_list_temp[split_index:]
 
 
-def get_datasets(split_ratio=0.8, transform=None, train_augmentation=None, random_seed=None):
-    participants_file = "participants_validLabelsOnly.pickle"
-    augmented_participant_files = ["participants_oversampledPositives.pickle"]
+def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentation=None, random_seed=None):
+    dataset_collection = {
+        "brogrammers": {
+            "dataset_class": BrogrammersMFCCDataset,
+            "participants_file": "participants_validLabelsOnly.pickle",
+            "augmented_files": ["participants_oversampledPositives.pickle"]
+        },
+        "resnet": {
+            "dataset_class": ResnetLogmelDataset,
+            "participants_file": "2022-11-25-added_logmel224x224_no_augmentations.pickle",
+            "augmented_files": ["2022-11-25-added_logmel224x224.pickle"]
+            # "augmented_files": None
+        }
+    }
+    dataset_dict = dataset_collection[dataset_name]
+    DatasetClass = dataset_dict["dataset_class"]
 
-    pos_ids, neg_ids, invalid_ids = get_ids_of("participants_validLabelsOnly.pickle")
+    # participants_file = "participants_validLabelsOnly.pickle"
+    # augmented_participant_files = ["participants_oversampledPositives.pickle"]
+    # participants_file = "2022-11-25-added_logmel224x224_no_augmentations.pickle"
+    # augmented_participant_files = ["2022-11-25-added_logmel224x224.pickle"]
+
+    pos_ids, neg_ids, invalid_ids = get_ids_of(dataset_dict["participants_file"])
     pos_ids_train, pos_ids_val = randomly_split_list_into_two(pos_ids, ratio=split_ratio, random_seed=random_seed)
     neg_ids_train, neg_ids_val = randomly_split_list_into_two(neg_ids, ratio=split_ratio, random_seed=random_seed)
     train_ids = pos_ids_train + neg_ids_train
     validation_ids = pos_ids_val + neg_ids_val
 
     # train_augmentations = Compose([AddGaussianNoise(0, 0.15), CyclicTemporalShift()])
-    training_set = CustomDataset(user_ids=train_ids, transform=transform, augmented_files=augmented_participant_files,
-                                 augmentations=train_augmentation, verbose=VERBOSE)
-    validation_set = CustomDataset(user_ids=validation_ids, transform=transform, verbose=VERBOSE)
+
+    # training_set = ResnetLogmelDataset(user_ids=train_ids, original_files=participants_file,
+    #                                    transform=transform, augmented_files=augmented_participant_files,
+    #                                    augmentations=train_augmentation, verbose=VERBOSE)
+    # validation_set = ResnetLogmelDataset(user_ids=validation_ids,  original_files=participants_file,
+    #                                      transform=transform, verbose=VERBOSE)
+    #
+    training_set = DatasetClass(user_ids=train_ids, original_files=dataset_dict["participants_file"],
+                                transform=transform, augmented_files=dataset_dict["augmented_files"],
+                                augmentations=train_augmentation, verbose=VERBOSE)
+    validation_set = DatasetClass(user_ids=validation_ids, original_files=dataset_dict["participants_file"],
+                                  transform=transform, verbose=VERBOSE)
+
+    # training_set = BrogrammersMFCCDataset(user_ids=train_ids, original_files=participants_file,
+    #                                       transform=transform, augmented_files=augmented_participant_files,
+    #                                       augmentations=train_augmentation, verbose=VERBOSE)
+    # validation_set = BrogrammersMFCCDataset(user_ids=validation_ids, original_files=participants_file,
+    #                                         transform=transform, verbose=VERBOSE)
     return training_set, validation_set
 
 
 # def get_data_loaders_deprecated(dataset, percent_train_set=0.8, rand_seed=None):
-    # n_train_samples = int(percent_train_set * len(data_set))
-    # n_val_samples = len(data_set) - int(n_train_samples)
-    # rng = torch.Generator()
-    # if rand_seed is not None:
-    #     rng.manual_seed(rand_seed)
-    # train_set, eval_set = random_split(dataset, [n_train_samples, n_val_samples], generator=rng)
-    # train = DataLoader(dataset=train_set, batch_size=p.batch_size, shuffle=True, drop_last=True)
-    # val = DataLoader(dataset=eval_set, batch_size=len(eval_set))
-    # return train, val
+# n_train_samples = int(percent_train_set * len(data_set))
+# n_val_samples = len(data_set) - int(n_train_samples)
+# rng = torch.Generator()
+# if rand_seed is not None:
+#     rng.manual_seed(rand_seed)
+# train_set, eval_set = random_split(dataset, [n_train_samples, n_val_samples], generator=rng)
+# train = DataLoader(dataset=train_set, batch_size=p.batch_size, shuffle=True, drop_last=True)
+# val = DataLoader(dataset=eval_set, batch_size=len(eval_set))
+# return train, val
 
 
 def get_data_loaders(training_set, validation_set):
@@ -123,26 +158,31 @@ def get_data_loaders(training_set, validation_set):
 
 
 def get_model(model_name, verbose=True, load_from_disc=False):
-    model_dict = {
-        "brogrammers": BrogrammersModel,
-        "brogrammers_old": BrogrammersSequentialModel
-    }
-    my_model = model_dict[model_name]().to(device)
-
-    # print model summary
-    if verbose:
-        full_input_shape = [p.batch_size]
-        for dim in my_model.input_size:
-            full_input_shape.append(dim)
-        summary(my_model, tuple(full_input_shape))
-
-    if load_from_disc:
-        try:
-            path = f"data/Coswara_processed/models/{model_name}/model.pth"
-            my_model.load_state_dict(torch.load(path))
-            print("model weights loaded from disc")
-        except FileNotFoundError:
-            print("no saved model parameters found")
+    # model_dict = {
+    #     "brogrammers": BrogrammersModel,
+    #     "brogrammers_old": BrogrammersSequentialModel,
+    # }
+    # my_model = model_dict[model_name]().to(device)
+    #
+    # # print model summary
+    # if verbose:
+    #     full_input_shape = [p.batch_size]
+    #     for dim in my_model.input_size:
+    #         full_input_shape.append(dim)
+    #     summary(my_model, tuple(full_input_shape))
+    #
+    # if load_from_disc:
+    #     try:
+    #         path = f"data/Coswara_processed/models/{model_name}/model.pth"
+    #         my_model.load_state_dict(torch.load(path))
+    #         print("model weights loaded from disc")
+    #     except FileNotFoundError:
+    #         print("no saved model parameters found")
+    my_model = resnet18(pretrained=True).to(device)
+    for param in my_model.parameters():
+        param.requires_grad = False
+    n_features = my_model.fc.in_features
+    my_model.fc = nn.Linear(n_features, 1)
 
     return my_model
 
@@ -172,11 +212,11 @@ def write_metrics_to_tensorboard(mode):
 # </editor-fold>
 
 # ###############################################  manual setup  #######################################################
-n_epochs = 300
+n_epochs = 30
 
 parameters = dict(
-    batch_size=[16],
-    lr=[1e-5],
+    batch_size=[128],
+    lr=[1e-3],
     weight_decay=[1e-4],
     noise_sigma=[0],
     cyclic_shift=[True],
@@ -185,8 +225,9 @@ parameters = dict(
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
-MODEL_NAME = "brogrammers"
-RUN_COMMENT = "super_small_batch_sizes"
+# "brogrammers", "resnet"
+MODEL_NAME = "resnet"
+RUN_COMMENT = "resnet18_logmel_duplicated_channels"
 VERBOSE = True
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False
@@ -198,8 +239,8 @@ date = datetime.today().strftime("%Y-%m-%d")
 RUN_NAME = f"{date}_{MODEL_NAME}_{RUN_COMMENT}"
 
 # data_set = CustomDataset(ToTensor(), verbose=VERBOSE)
-train_set, val_set = get_datasets(split_ratio=0.8, transform=transforms,
-                                  train_augmentation=augmentations,  random_seed=None)
+train_set, val_set = get_datasets(MODEL_NAME, split_ratio=0.8, transform=transforms,
+                                  train_augmentation=augmentations, random_seed=None)
 
 for p in get_parameter_combinations(parameters):
 
@@ -212,12 +253,12 @@ for p in get_parameter_combinations(parameters):
     else:
         train_set.augmentations = Compose([AddGaussianNoise(0, p.noise_sigma)])
 
-
     if TRACK_METRICS:
         writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
 
     train_loader, eval_loader = get_data_loaders(train_set, val_set)
     my_cnn = get_model(MODEL_NAME, load_from_disc=LOAD_FROM_DISC, verbose=False)
+
     optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
     tracker = IntraEpochMetricsTracker()
     # adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
