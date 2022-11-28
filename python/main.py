@@ -1,11 +1,7 @@
-from models import BrogrammersModel, BrogrammersSequentialModel
+from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18
 from evaluation_and_tracking import IntraEpochMetricsTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift
 from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset
-import librosa
-import matplotlib.pyplot as plt
-from torch.utils.data import random_split
-from torchvision.models import resnet18
 from datetime import datetime
 import time
 import numpy as np
@@ -99,8 +95,8 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
         "resnet": {
             "dataset_class": ResnetLogmelDataset,
             "participants_file": "2022-11-25-added_logmel224x224_no_augmentations.pickle",
-            "augmented_files": ["2022-11-25-added_logmel224x224.pickle"]
-            # "augmented_files": None
+            # "augmented_files": ["2022-11-25-added_logmel224x224.pickle"]
+            "augmented_files": None
         }
     }
     dataset_dict = dataset_collection[dataset_name]
@@ -158,19 +154,21 @@ def get_data_loaders(training_set, validation_set):
 
 
 def get_model(model_name, verbose=True, load_from_disc=False):
-    # model_dict = {
-    #     "brogrammers": BrogrammersModel,
-    #     "brogrammers_old": BrogrammersSequentialModel,
-    # }
-    # my_model = model_dict[model_name]().to(device)
-    #
+    model_dict = {
+        "brogrammers": BrogrammersModel,
+        "brogrammers_old": BrogrammersSequentialModel,
+        "resnet": get_resnet18
+    }
+    my_model = model_dict[model_name]().to(device)
+
     # # print model summary
-    # if verbose:
-    #     full_input_shape = [p.batch_size]
-    #     for dim in my_model.input_size:
-    #         full_input_shape.append(dim)
-    #     summary(my_model, tuple(full_input_shape))
-    #
+    if verbose:
+        full_input_shape = [p.batch_size]
+        for dim in my_model.input_size:
+            full_input_shape.append(dim)
+        summary(my_model, tuple(full_input_shape))
+
+    # TODO move the load from disc functionality inside the "models.py" script
     # if load_from_disc:
     #     try:
     #         path = f"data/Coswara_processed/models/{model_name}/model.pth"
@@ -178,11 +176,6 @@ def get_model(model_name, verbose=True, load_from_disc=False):
     #         print("model weights loaded from disc")
     #     except FileNotFoundError:
     #         print("no saved model parameters found")
-    my_model = resnet18(pretrained=True).to(device)
-    for param in my_model.parameters():
-        param.requires_grad = False
-    n_features = my_model.fc.in_features
-    my_model.fc = nn.Linear(n_features, 1)
 
     return my_model
 
@@ -212,22 +205,22 @@ def write_metrics_to_tensorboard(mode):
 # </editor-fold>
 
 # ###############################################  manual setup  #######################################################
-n_epochs = 30
+n_epochs = 100
 
 parameters = dict(
-    batch_size=[128],
-    lr=[1e-3],
+    batch_size=[32, 64],
+    lr=[1e-3, 1e-4],
     weight_decay=[1e-4],
     noise_sigma=[0],
-    cyclic_shift=[True],
-    pos_class_weighting=[1]
+    cyclic_shift=[True, False],
+    pos_class_weighting=[1, 2]
 )
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
 # "brogrammers", "resnet"
 MODEL_NAME = "resnet"
-RUN_COMMENT = "resnet18_logmel_duplicated_channels"
+RUN_COMMENT = "resnet18_hyperparameters_variations"
 VERBOSE = True
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False

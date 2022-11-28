@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torchvision.models import resnet18
 
 
 
@@ -10,6 +11,7 @@ class BrogrammersModel(nn.Module):
         TIMESTEPS = 259
         MFCC_BINS = 15
         self.input_size = (1, MFCC_BINS, TIMESTEPS)
+
         n_filters1 = 64
         n_filters2 = 32
 
@@ -93,3 +95,17 @@ class BrogrammersSequentialModel(nn.Module):
     def forward(self, input_data):
         prediction = self.model(input_data)
         return prediction
+
+
+def get_resnet18():
+    # TODO does this work?
+    TIMESTEPS = 224
+    FREQUNCY_BINS = 224
+    N_CHANNELS = 3
+    my_model = resnet18(pretrained=True)
+    my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
+    for param in my_model.parameters():
+        param.requires_grad = False
+    n_features = my_model.fc.in_features
+    my_model.fc = nn.Linear(n_features, 1)
+    return my_model
