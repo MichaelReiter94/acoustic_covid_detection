@@ -95,8 +95,8 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
         "resnet": {
             "dataset_class": ResnetLogmelDataset,
             "participants_file": "2022-11-25-added_logmel224x224_no_augmentations.pickle",
-            # "augmented_files": ["2022-11-25-added_logmel224x224.pickle"]
-            "augmented_files": None
+            "augmented_files": ["2022-11-25-added_logmel224x224.pickle"]
+            # "augmented_files": None
         }
     }
     dataset_dict = dataset_collection[dataset_name]
@@ -205,22 +205,22 @@ def write_metrics_to_tensorboard(mode):
 # </editor-fold>
 
 # ###############################################  manual setup  #######################################################
-n_epochs = 100
+n_epochs = 250
 
 parameters = dict(
-    batch_size=[32, 64],
-    lr=[1e-3, 1e-4],
+    batch_size=[64],
+    lr=[1e-3, 1e-4, 1e-5],
     weight_decay=[1e-4],
     noise_sigma=[0],
     cyclic_shift=[True, False],
-    pos_class_weighting=[1, 2]
+    pos_class_weighting=[1]
 )
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
 # "brogrammers", "resnet"
 MODEL_NAME = "resnet"
-RUN_COMMENT = "resnet18_hyperparameters_variations"
+RUN_COMMENT = "resnet18_train_all_layers"
 VERBOSE = True
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False

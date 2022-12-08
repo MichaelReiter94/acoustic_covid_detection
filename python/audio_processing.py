@@ -30,24 +30,26 @@ def create_participant_objects(save_to: str, augmentations=None, augmentations_p
     error_ids_zero_length, error_ids_all_zeros, error_ids_unknown, participants, errors = [], [], [], [], {}
     for ID in tqdm(participant_ids):
         participant_metadata = metadata[metadata["user_id"] == ID]
-        try:
-            label = int(participant_metadata.covid_label)
-            for _ in range(augmentations_per_label[label]):
-                participants.append(Participant(ID, augmentations=augmentations))
-        except ValueError as e:
-            # length of recording is 0
-            # or no valid covid label
-            error_ids_zero_length.append(ID)
-            errors[type(e).__name__] = {"error_description": e.args[0],
-                                        "error_meaning": "length of the audio file = 0 or the user does not have a "
-                                                         "valid covid label/test",
-                                        "id_list": error_ids_zero_length}
-        except librosa.util.exceptions.ParameterError as e:
-            # all values in the audio file are 0 (but the length is > 0) resulting in NaN when normalizing with 0 as max
-            error_ids_all_zeros.append(ID)
-            errors[type(e).__name__] = {"error_description": e.args[0],
-                                        "error_meaning": "All values in audio file are 0",
-                                        "id_list": error_ids_all_zeros}
+        # print(participant_metadata["audio_quality_heavy_cough"].item())
+        if participant_metadata["audio_quality_heavy_cough"].item() > 0:
+            try:
+                label = int(participant_metadata.covid_label)
+                for _ in range(augmentations_per_label[label]):
+                    participants.append(Participant(ID, augmentations=augmentations))
+            except ValueError as e:
+                # length of recording is 0
+                # or no valid covid label
+                error_ids_zero_length.append(ID)
+                errors[type(e).__name__] = {"error_description": e.args[0],
+                                            "error_meaning": "length of the audio file = 0 or the user does not have a "
+                                                             "valid covid label/test",
+                                            "id_list": error_ids_zero_length}
+            except librosa.util.exceptions.ParameterError as e:
+                # all values in the audio file are 0 (but the length is > 0) resulting in NaN when normalizing with 0 as max
+                error_ids_all_zeros.append(ID)
+                errors[type(e).__name__] = {"error_description": e.args[0],
+                                            "error_meaning": "All values in audio file are 0",
+                                            "id_list": error_ids_all_zeros}
 
     if UPDATE_INVALID_RECORDINGS:
         with open("data/Coswara_processed/pickles/invalid_recordings.pickle", "wb") as f:

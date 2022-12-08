@@ -104,8 +104,8 @@ def get_resnet18():
     N_CHANNELS = 3
     my_model = resnet18(pretrained=True)
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
-    for param in my_model.parameters():
-        param.requires_grad = False
+    # for param in my_model.parameters():
+    #     param.requires_grad = False
     n_features = my_model.fc.in_features
     my_model.fc = nn.Linear(n_features, 1)
     return my_model
