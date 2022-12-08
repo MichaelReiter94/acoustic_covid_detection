@@ -5,7 +5,6 @@ import torch
 from torchvision import transforms
 
 
-
 class CustomDataset(Dataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
                  verbose=True):
@@ -44,7 +43,7 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         input_features = self.get_input_features(idx)
-        input_features = self.transform(input_features)
+        # input_features = self.transform(input_features)
         if self.augmentations is not None:
             input_features = self.augmentations(input_features)
 
@@ -103,6 +102,7 @@ class BrogrammersMFCCDataset(CustomDataset):
     def get_input_features(self, idx):
         input_features = self.participants[idx].heavy_cough.MFCCs
         input_features = self.z_normalize(input_features)
+        input_features = self.transform(input_features)
         return input_features
 
     @staticmethod
@@ -126,7 +126,27 @@ class ResnetLogmelDataset(CustomDataset):
 
     def get_input_features(self, idx):
         input_features = self.participants[idx].heavy_cough.logmel
+        input_features = self.transform(input_features)
         return input_features
+
+    @staticmethod
+    def get_feature_statistics():
+        # do nothing - no normalization
+        return 0., 1.
+
+
+class ResnetLogmel3Channels(CustomDataset):
+    def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
+                 verbose=True):
+        self.n_channels = 3
+        self.n_timesteps = 224
+        self.frequency_resolution = 224
+        super(ResnetLogmel3Channels, self).__init__(user_ids, original_files, transform,
+                                                    augmentations, augmented_files, verbose)
+
+    def get_input_features(self, idx):
+        input_features = self.participants[idx].heavy_cough.logmel_3c
+        return torch.Tensor(input_features)
 
     @staticmethod
     def get_feature_statistics():

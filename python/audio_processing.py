@@ -70,8 +70,8 @@ time_domain_augmentations = Compose([
 participant_ids = os.listdir("data/Coswara_processed/Recordings")
 metadata = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
 
-create_participant_objects(save_to="2022-11-25-added_logmel224x224_no_augmentations",
+create_participant_objects(save_to="2022-12-08_test",
                            augmentations=None,
-                           augmentations_per_label=(1, 1))
+                           augmentations_per_label=(1, 4))
 
 # TODO add a filter concerning audio quality before doing the processing steps... this saves a lot of time and memory

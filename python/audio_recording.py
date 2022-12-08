@@ -22,20 +22,43 @@ def get_logmel_spectrum(audio, sr):
     mel_spect = librosa.feature.melspectrogram(y=audio, n_fft=n_fft, hop_length=hop_size,
                                                win_length=window_length, n_mels=n_mels,
                                                sr=target_sr, fmin=0, fmax=target_sr / 2, htk=True)
-    #
-    # window_length = 2048  # 46ms
-    # mel_spect_channel2 = librosa.feature.melspectrogram(y=audio, n_fft=n_fft, hop_length=hop_size,
-    #                                                     win_length=window_length, n_mels=n_mels,
-    #                                                     sr=target_sr, fmin=0, fmax=target_sr / 2, htk=True)
-    #
-    # window_length = 4096  # 96ms
-    # mel_spect_channel3 = librosa.feature.melspectrogram(y=audio, n_fft=n_fft, hop_length=hop_size,
-    #                                                     win_length=window_length, n_mels=n_mels,
-    #                                                     sr=target_sr, fmin=0, fmax=target_sr / 2, htk=True)
 
-    # mel_spect = np.concatenate()
     # mel_frequencies = librosa.mel_frequencies(n_mels=n_mels, htk=True, fmin=0, fmax=target_sr/2)
     return librosa.power_to_db(mel_spect)
+
+
+def get_3_channel_logmel_spectrum(audio, sr):
+    # total duration = 2.6 seconds (512 samples hopsize = 11.6ms --> 11.6ms * 224 (frames for resnet input) = 2.6s
+    target_sr = 44100
+    if target_sr != sr:
+        audio = librosa.resample(y=audio, orig_sr=sr, target_sr=target_sr)
+    n_fft = 1024 * 16  # only for zero padding to increas frequency resolution
+    hop_size = 512  # 11.6ms
+    n_mels = 224
+    base_window_legth = 512
+
+    window_length = base_window_legth  # 11ms
+    channel1 = librosa.feature.melspectrogram(y=audio, n_fft=n_fft, hop_length=hop_size,
+                                              win_length=window_length, n_mels=n_mels,
+                                              sr=target_sr, fmin=0, fmax=target_sr / 2, htk=True)
+
+    window_length = base_window_legth * 4  # 46ms
+    channel2 = librosa.feature.melspectrogram(y=audio, n_fft=n_fft, hop_length=hop_size,
+                                              win_length=window_length, n_mels=n_mels,
+                                              sr=target_sr, fmin=0, fmax=target_sr / 2, htk=True)
+
+    window_length = base_window_legth * 16  # 185ms
+    channel3 = librosa.feature.melspectrogram(y=audio, n_fft=n_fft, hop_length=hop_size,
+                                              win_length=window_length, n_mels=n_mels,
+                                              sr=target_sr, fmin=0, fmax=target_sr / 2, htk=True)
+
+    channel1 = librosa.power_to_db(channel1)
+    channel2 = librosa.power_to_db(channel2)
+    channel3 = librosa.power_to_db(channel3)
+
+    mel_spect = np.stack([channel1, channel2, channel3])
+    # mel_frequencies = librosa.mel_frequencies(n_mels=n_mels, htk=True, fmin=0, fmax=target_sr/2)
+    return mel_spect
 
 
 def get_15_MFCCs(audio, sr):
@@ -70,8 +93,9 @@ class AudioRecording:
         if self.augmentations is not None:
             audio = self.augmentations(audio, self.original_sr)
 
-        self.MFCCs = get_15_MFCCs(audio, sr=self.original_sr)
-        self.logmel = get_logmel_spectrum(audio, self.original_sr)
+        # self.MFCCs = get_15_MFCCs(audio, sr=self.original_sr)
+        # self.logmel = get_logmel_spectrum(audio, self.original_sr)
+        self.logmel_3c = get_3_channel_logmel_spectrum(audio, self.original_sr)
 
     def get_audio(self, trim_silence_below_x_dB=48):
         audio, sr = librosa.load(self.file_path, sr=None)
@@ -126,4 +150,29 @@ class AudioRecording:
                                  hop_length=hop_size, sr=target_sr, y_coords=mel_frequencies)
         plt.colorbar(format="%+2.f dB")
         print(self.logmel.shape)
-# TODO: detect if clipping was present (redundant because we already have a measure for the audio quality?
+
+    def show_3channel_logmel(self, time_frame=None, frequency_range=None):
+        """
+        time_frame: tuple of starting time in seconds and end time in seconds to view
+        frequency_range: tuple of starting and end frequency you want to be shown
+        if None is specified the full spectrum/time will be displaid
+        """
+        target_sr = 44100
+        hop_size = 512  # 11.6ms
+        n_mels = 224
+        titles = ["512 samples = 11.6ms", "2048 samples = 46.4ms", "8192 samples = 185.6ms"]
+        fmin = 0
+
+        mel_frequencies = librosa.mel_frequencies(n_mels=n_mels, htk=True, fmin=fmin, fmax=target_sr / 2)
+
+        fig, axes = plt.subplots(nrows=1, ncols=3, figsize=[18, 6])
+        for i, ax in enumerate(axes):
+            img = librosa.display.specshow(self.logmel_3c[i], x_axis='time', y_axis='log', cmap="magma",
+                                           hop_length=hop_size, sr=target_sr, y_coords=mel_frequencies, ax=ax)
+            if time_frame is not None:
+                ax.set(xlim=[time_frame[0], time_frame[1]])
+            if frequency_range is not None:
+                ax.set(ylim=[frequency_range[0], frequency_range[1]])
+            ax.set(title=f"fft window  length: {titles[i]}")
+            fig.colorbar(img, ax=ax, format="%+2.f dB")
+        plt.tight_layout()
