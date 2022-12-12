@@ -35,19 +35,19 @@ def get_3_channel_logmel_spectrum(audio, sr):
     n_fft = 1024 * 16  # only for zero padding to increas frequency resolution
     hop_size = 512  # 11.6ms
     n_mels = 224
-    base_window_legth = 512
+    base_window_legth = 1024
 
     window_length = base_window_legth  # 11ms
     channel1 = librosa.feature.melspectrogram(y=audio, n_fft=n_fft, hop_length=hop_size,
                                               win_length=window_length, n_mels=n_mels,
                                               sr=target_sr, fmin=0, fmax=target_sr / 2, htk=True)
 
-    window_length = base_window_legth * 4  # 46ms
+    window_length = base_window_legth * 2  # 46ms
     channel2 = librosa.feature.melspectrogram(y=audio, n_fft=n_fft, hop_length=hop_size,
                                               win_length=window_length, n_mels=n_mels,
                                               sr=target_sr, fmin=0, fmax=target_sr / 2, htk=True)
 
-    window_length = base_window_legth * 16  # 185ms
+    window_length = base_window_legth * 4  # 185ms
     channel3 = librosa.feature.melspectrogram(y=audio, n_fft=n_fft, hop_length=hop_size,
                                               win_length=window_length, n_mels=n_mels,
                                               sr=target_sr, fmin=0, fmax=target_sr / 2, htk=True)
@@ -94,8 +94,8 @@ class AudioRecording:
             audio = self.augmentations(audio, self.original_sr)
 
         # self.MFCCs = get_15_MFCCs(audio, sr=self.original_sr)
-        # self.logmel = get_logmel_spectrum(audio, self.original_sr)
-        self.logmel_3c = get_3_channel_logmel_spectrum(audio, self.original_sr)
+        self.logmel = get_logmel_spectrum(audio, self.original_sr)
+        # self.logmel_3c = get_3_channel_logmel_spectrum(audio, self.original_sr)
 
     def get_audio(self, trim_silence_below_x_dB=48):
         audio, sr = librosa.load(self.file_path, sr=None)

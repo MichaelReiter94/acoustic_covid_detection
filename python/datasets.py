@@ -78,12 +78,11 @@ class CustomDataset(Dataset):
     def summarize(self):
         print(f"Total number of items = {len(self)}")
         print(f"label count = {self.label_counts()}")
-        print(f"shape of input data without batch size: {self.get_input_shape()}")
+        # print(f"shape of input data without batch size: {self.get_input_shape()}")
 
     @staticmethod
     def get_feature_statistics():
         # why do I have to convert it to float32???
-        # TODO make individual for each specific subclass and ignore if there are no statistics
         mu = np.load("data/Coswara_processed/pickles/mean_cough_heavy_15MFCCs.npy")
         mu = np.expand_dims(mu, axis=1).astype("float32")
         sigma = np.load("data/Coswara_processed/pickles/stds_cough_heavy_15MFCCs.npy")
@@ -147,6 +146,26 @@ class ResnetLogmel3Channels(CustomDataset):
     def get_input_features(self, idx):
         input_features = self.participants[idx].heavy_cough.logmel_3c
         return torch.Tensor(input_features)
+
+    @staticmethod
+    def get_feature_statistics():
+        # do nothing - no normalization
+        return 0., 1.
+
+
+class ResnetLogmel1ChannelBreath(CustomDataset):
+    def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
+                 verbose=True):
+        self.n_channels = 3
+        self.n_timesteps = 224
+        self.frequency_resolution = 224
+        super(ResnetLogmel1ChannelBreath, self).__init__(user_ids, original_files, transform,
+                                                         augmentations, augmented_files, verbose)
+
+    def get_input_features(self, idx):
+        input_features = self.participants[idx].deep_breath.logmel
+        input_features = self.transform(input_features)
+        return input_features
 
     @staticmethod
     def get_feature_statistics():

@@ -14,9 +14,9 @@ class Participant:
         self.id = participant_id
         data_directory = "data/Coswara_processed/Recordings"
         self.file_path_participant = os.path.join(data_directory, self.id).replace("\\", "/")
-        self.heavy_cough = AudioRecording(self.file_path_participant, "cough-heavy", augmentations)
+        # self.heavy_cough = AudioRecording(self.file_path_participant, "cough-heavy", augmentations)
         # self.shallow_cough = AudioRecording(self.file_path_participant, type_of_recording="cough-shallow")
-        # self.deep_breath = AudioRecording(self.file_path_participant, type_of_recording="breathing-deep")
+        self.deep_breath = AudioRecording(self.file_path_participant, type_of_recording="breathing-deep")
         # self.shallow_breath = AudioRecording(self.file_path_participant, type_of_recording="breathing-shallow")
         # self.counting_fast = AudioRecording(self.file_path_participant, type_of_recording="counting-fast")
         # self.counting_normal = AudioRecording(self.file_path_participant, type_of_recording="counting-normal")

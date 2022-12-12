@@ -1,7 +1,7 @@
-from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18
+from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50
 from evaluation_and_tracking import IntraEpochMetricsTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift
-from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, ResnetLogmel3Channels
+from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, ResnetLogmel3Channels, ResnetLogmel1ChannelBreath
 from datetime import datetime
 import time
 import numpy as np
@@ -98,10 +98,22 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
             "augmented_files": ["2022-11-25-added_logmel224x224.pickle"]
             # "augmented_files": None
         },
-        "logmel_3_channels": {
+        "logmel_3_channels_512_2048_8192": {
             "dataset_class": ResnetLogmel3Channels,
             "participants_file": "2022-12-08_logmel_3_channel_noAug_noBadAudio.pickle",
             "augmented_files": ["2022-12-08_logmel_3_channel_augmented_noBadAudio.pickle"]
+            # "augmented_files": None
+        },
+        "logmel_3_channels_1024_2048_4096": {
+            "dataset_class": ResnetLogmel3Channels,
+            "participants_file": "2022-12-10_logmel_3_channel_noAug_1024x2048x4096.pickle",
+            "augmented_files": ["2022-12-10_logmel_3_channel_augmented_1024x2048x4096.pickle"]
+            # "augmented_files": None
+        },
+        "logmel_1_channel_breath": {
+            "dataset_class": ResnetLogmel1ChannelBreath,
+            "participants_file": "2022-12-11_logmel_1_channel_noAug_heavy_breathing.pickle",
+            "augmented_files": ["2022-12-11_logmel_1_channel_augmented_heavy_breathing.pickle"]
             # "augmented_files": None
         }
     }
@@ -132,7 +144,8 @@ def get_model(model_name, verbose=True, load_from_disc=False):
     model_dict = {
         "brogrammers": BrogrammersModel,
         "brogrammers_old": BrogrammersSequentialModel,
-        "resnet18": get_resnet18
+        "resnet18": get_resnet18,
+        "resnet50": get_resnet50
     }
     my_model = model_dict[model_name]().to(device)
 
@@ -180,23 +193,29 @@ def write_metrics_to_tensorboard(mode):
 # </editor-fold>
 
 # ###############################################  manual setup  #######################################################
-n_epochs = 250
+n_epochs = 5
 
 parameters = dict(
-    batch_size=[64],
-    lr=[1e-3, 1e-4, 1e-5],
-    weight_decay=[1e-4],
+    batch_size=[16, 32, 64],
+    lr=[1e-4],
+    weight_decay=[0.0001],
     noise_sigma=[0],
-    cyclic_shift=[True, False],
+    cyclic_shift=[True],
     pos_class_weighting=[1]
 )
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
-# "brogrammers", "resnet"
-MODEL_NAME = "resnet18"
-DATASET_NAME = "logmel_3_channels"
-RUN_COMMENT = "resnet18_3channels_train_all_layers"
+# "brogrammers", "resnet18", "resnet50"
+MODEL_NAME = "resnet50"
+print(f"model used: {MODEL_NAME}")
+# logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath
+DATASET_NAME = "logmel_1_channel"
+print(f"Dataset used: {DATASET_NAME}")
+
+RUN_COMMENT = f"test"
+date = datetime.today().strftime("%Y-%m-%d")
+RUN_NAME = f"{date}_{MODEL_NAME}_{DATASET_NAME}_{RUN_COMMENT}"
 VERBOSE = True
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False
@@ -204,14 +223,12 @@ TRACK_METRICS = True
 
 # ############################################ setup ###################################################################
 device = "cuda" if torch.cuda.is_available() else "cpu"
-date = datetime.today().strftime("%Y-%m-%d")
-RUN_NAME = f"{date}_{MODEL_NAME}_{RUN_COMMENT}"
 
 # data_set = CustomDataset(ToTensor(), verbose=VERBOSE)
-train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
-                                  train_augmentation=augmentations, random_seed=None)
 
 for p in get_parameter_combinations(parameters):
+    train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
+                                      train_augmentation=augmentations, random_seed=None)
 
     # if p.noise_sigma > 0:
     #     train_set.augmentations = Compose([AddGaussianNoise(0, p.noise_sigma), CyclicTemporalShift()])

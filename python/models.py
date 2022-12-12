@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torchvision.models import resnet18
+from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_Weights
 
 
 
@@ -98,14 +98,28 @@ class BrogrammersSequentialModel(nn.Module):
 
 
 def get_resnet18():
-    # TODO does this work?
     TIMESTEPS = 224
     FREQUNCY_BINS = 224
     N_CHANNELS = 3
-    my_model = resnet18(pretrained=True)
+    # my_model = resnet18(pretrained=True)
+    my_model = resnet18(weights=ResNet18_Weights.DEFAULT)
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
     # for param in my_model.parameters():
     #     param.requires_grad = False
     n_features = my_model.fc.in_features
     my_model.fc = nn.Linear(n_features, 1)
     return my_model
+
+
+def get_resnet50():
+    TIMESTEPS = 224
+    FREQUNCY_BINS = 224
+    N_CHANNELS = 3
+    my_model = resnet50(weights=ResNet50_Weights.DEFAULT)
+    my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
+    # for param in my_model.parameters():
+    #     param.requires_grad = False
+    n_features = my_model.fc.in_features
+    my_model.fc = nn.Linear(n_features, 1)
+    return my_model
+
