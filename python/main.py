@@ -36,8 +36,8 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
     input_data, label = input_data.to(device), label.to(device)
     prediction = torch.squeeze(model(input_data))
     loss = current_loss_func(prediction, label)
-    accuracy = get_accuracy(prediction, label)
-    my_tracker.add_metrics(loss, accuracy, label, prediction)
+    # accuracy = get_accuracy(prediction, label)
+    my_tracker.add_metrics(loss, label, prediction)
 
     # backpropagation
     current_optimizer.zero_grad()
@@ -51,15 +51,9 @@ def evaluate_batch(model, current_batch, loss_function, my_tracker):
     input_data, label = input_data.to(device), label.to(device)
     prediction = torch.squeeze(model(input_data))
     loss = loss_function(prediction, label)
-    accuracy = get_accuracy(prediction, label)
-    my_tracker.add_metrics(loss, accuracy, label, prediction)
-
-
-def get_accuracy(predictions, labels, threshold=0.5):
-    predicted_labels = predictions > threshold
-    labels_bool = labels > threshold
-    n_correctly_predicted = torch.sum(predicted_labels == labels_bool)
-    return n_correctly_predicted.item() / len(predictions)
+    # pred_after_sigmoid = torch.sigmoid(prediction)
+    # accuracy = get_accuracy(prediction, label)
+    my_tracker.add_metrics(loss, label, prediction)
 
 
 def get_ids_of(participants_filename):
@@ -90,7 +84,9 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
         "15_mfccs": {
             "dataset_class": BrogrammersMFCCDataset,
             "participants_file": "participants_validLabelsOnly.pickle",
-            "augmented_files": ["participants_oversampledPositives.pickle"]
+            "augmented_files": ["participants_oversampledPositives.pickle"],
+            # "augmented_files": None
+
         },
         "logmel_1_channel": {
             "dataset_class": ResnetLogmelDataset,
@@ -182,35 +178,52 @@ def get_optimizer(model_name, load_from_disc=False):
 
 def write_metrics_to_tensorboard(mode):
     if TRACK_METRICS:
-        loss, acc, aucroc, tpr_at_95, auc_pr = tracker.get_epoch_metrics()
-        writer.add_scalar(f"01_loss/{mode}", loss, epoch)
-        writer.add_scalar(f"02_accuracy/{mode}", acc, epoch)
-        writer.add_scalar(f"03_AUC-ROC/{mode}", aucroc, epoch)
-        writer.add_scalar(f"04_true_positives_at_95/{mode}", tpr_at_95, epoch)
-        writer.add_scalar(f"05_AUC-precision-recall/{mode}", auc_pr, epoch)
+        # loss, acc, aucroc, tpr_at_95, auc_pr = tracker.get_epoch_metrics()
+        metrics = tracker.get_epoch_metrics()
+        writer.add_scalar(f"01_loss/{mode}", metrics["loss"], epoch)
+        writer.add_scalar(f"02_accuracy/{mode}", metrics["accuracy"], epoch)
+        writer.add_scalar(f"03_AUC-ROC/{mode}", metrics["auc_roc"], epoch)
+        writer.add_scalar(f"04_f1_score/{mode}", metrics["f1_score"], epoch)
+        writer.add_scalar(f"05_AUC-precision-recall/{mode}", metrics["auc_prec_recall"], epoch)
+        writer.add_scalar(f"06_TPR_or_Recall_or_Sensitivity/{mode}", metrics["tpr"], epoch)
+        writer.add_scalar(f"07_TrueNegativeRate_or_Specificity/{mode}", metrics["tnr"], epoch)
+        writer.add_scalar(f"08_Precision_or_PositivePredictiveValue/{mode}", metrics["precision"], epoch)
+        writer.add_scalar(f"09_true_positives_at_95/{mode}", metrics["tpr_at_95"], epoch)
 
 
+def get_online_augmentations(run_parameters):
+    if run_parameters.cyclic_shift:
+        augmentation = Compose([AddGaussianNoise(0, run_parameters.noise_sigma), CyclicTemporalShift()])
+    else:
+        augmentation = Compose([AddGaussianNoise(0, run_parameters.noise_sigma)])
+    return augmentation
 # </editor-fold>
 
+
 # ###############################################  manual setup  #######################################################
-n_epochs = 5
+random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
+                66445511337, 316497938271, 161094, 191919191, 101010107]
+
+n_epochs = 50
+n_cross_validation_runs = 1
 
 parameters = dict(
-    batch_size=[16, 32, 64],
-    lr=[1e-4],
-    weight_decay=[0.0001],
-    noise_sigma=[0],
+    random_seed=random_seeds[:n_cross_validation_runs],
+    batch_size=[16, 32, 64, 128],
+    lr=[1e-3, 1e-4, 1e-5],
+    weight_decay=[1e-3, 1e-4],
+    noise_sigma=[0, 0.1, 0.2],
     cyclic_shift=[True],
-    pos_class_weighting=[1]
+    pos_class_weighting=[1.6]
 )
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
 # "brogrammers", "resnet18", "resnet50"
-MODEL_NAME = "resnet50"
+MODEL_NAME = "brogrammers"
 print(f"model used: {MODEL_NAME}")
-# logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath
-DATASET_NAME = "logmel_1_channel"
+# logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath, 15_mfccs
+DATASET_NAME = "15_mfccs"
 print(f"Dataset used: {DATASET_NAME}")
 
 RUN_COMMENT = f"test"
@@ -227,18 +240,11 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 # data_set = CustomDataset(ToTensor(), verbose=VERBOSE)
 
 for p in get_parameter_combinations(parameters):
+
     train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
-                                      train_augmentation=augmentations, random_seed=None)
+                                      train_augmentation=augmentations, random_seed=p.random_seed)
 
-    # if p.noise_sigma > 0:
-    #     train_set.augmentations = Compose([AddGaussianNoise(0, p.noise_sigma), CyclicTemporalShift()])
-    # else:
-    #     train_set.augmentations = None
-    if p.cyclic_shift:
-        train_set.augmentations = Compose([AddGaussianNoise(0, p.noise_sigma), CyclicTemporalShift()])
-    else:
-        train_set.augmentations = Compose([AddGaussianNoise(0, p.noise_sigma)])
-
+    train_set.augmentations = get_online_augmentations(p)
     if TRACK_METRICS:
         writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
 
@@ -247,21 +253,17 @@ for p in get_parameter_combinations(parameters):
 
     optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
     tracker = IntraEpochMetricsTracker()
-    # adding a weight to the positive class (which is the underrepresented class --> pas_weight > 1)
     loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.pos_class_weighting])).to(device)
-    # loss_func = nn.BCEWithLogitsLoss().to(device)
     # ################################################ training ########################################################
 
     epoch_start = time.time()
     for epoch in range(n_epochs):
         tracker.reset()
-        # data_set.use_augmentations = True
         for i, batch in enumerate(train_loader):
             train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
         write_metrics_to_tensorboard(mode="train")
 
         with torch.no_grad():
-            # data_set.use_augmentations = False
             tracker.reset()
             for i, batch in enumerate(eval_loader):
                 evaluate_batch(my_cnn, batch, loss_func, tracker)
