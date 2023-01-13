@@ -21,7 +21,9 @@ import pandas as pd
 # </editor-fold>
 
 
-def create_participant_objects(save_to: str, augmentations=None, augmentations_per_label=(1, 1),
+def create_participant_objects(save_to: str,
+                               augmentations=None,
+                               augmentations_per_label=(1, 1),
                                UPDATE_INVALID_RECORDINGS=False):
     # no oversampling when there are no augmentations specified
     if augmentations is None:
@@ -31,7 +33,8 @@ def create_participant_objects(save_to: str, augmentations=None, augmentations_p
     for ID in tqdm(participant_ids):
         participant_metadata = metadata[metadata["user_id"] == ID]
         # print(participant_metadata["audio_quality_heavy_cough"].item())
-        if participant_metadata["audio_quality_deep_breathing"].item() > 0:
+        # if participant_metadata["audio_quality_deep_breathing"].item() > 0:
+        if participant_metadata["audio_quality_heavy_cough"].item() > 0:
             try:
                 label = int(participant_metadata.covid_label)
                 for _ in range(augmentations_per_label[label]):
@@ -70,7 +73,7 @@ time_domain_augmentations = Compose([
 participant_ids = os.listdir("data/Coswara_processed/Recordings")
 metadata = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
 
-create_participant_objects(save_to="2022-12-11_logmel_1_channel_augmented_heavy_breathing",
-                           augmentations=time_domain_augmentations,
+create_participant_objects(save_to="2022-12-13_MFCCs_original_highTimeRes",
+                           augmentations=None,
                            augmentations_per_label=(1, 4))
 

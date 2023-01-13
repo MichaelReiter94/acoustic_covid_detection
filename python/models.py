@@ -14,6 +14,7 @@ class BrogrammersModel(nn.Module):
 
         n_filters1 = 64
         n_filters2 = 32
+        torch.manual_seed(9876543210)
 
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=n_filters1, kernel_size=3)
         # TODO the stride of the max-pool layer might be wrong... (not specified in paper but no arguments means
@@ -51,9 +52,9 @@ class BrogrammersSequentialModel(nn.Module):
         TIMESTEPS = 259
         MFCC_BINS = 15
         self.input_size = (1, MFCC_BINS, TIMESTEPS)
-
         n_filters = 64
 
+        torch.manual_seed(9876543210)
         self.model = nn.Sequential(
             # valid padding means that it is NOT padded --> it looses size
             # a 3x3 kernel with a stride of 1 removes 2 "pixels" from each dimension

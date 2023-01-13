@@ -60,11 +60,11 @@ class ModelEvaluator:
 
 def get_accuracy(labels, predictions, threshold=0.5):
     labels_bool = labels > threshold
-    # print(f"\n\nactual positive labels: {np.sum(labels_bool)}")
+    print(f"\n\nactual positive labels: {np.sum(labels_bool)}")
     predicted_labels = predictions > threshold
-    # print(f"predicted as positive: {np.sum(predicted_labels)}")
+    print(f"predicted as positive: {np.sum(predicted_labels)}")
     n_correctly_predicted = np.sum(predicted_labels == labels_bool) / len(predictions)
-    # print(f"correctly predicted: {round(n_correctly_predicted*100, 2)}%")
+    print(f"correctly predicted: {round(n_correctly_predicted*100, 2)}%")
     return n_correctly_predicted
 
 
@@ -72,7 +72,7 @@ def get_confusion_matrix_parameters(labels, predictions, threshold=0.5):
     predictions_bool = predictions > threshold
     labels_bool = labels > threshold
     confusion_mat = confusion_matrix(labels_bool, predictions_bool)
-    # print(pd.DataFrame(np.flip(confusion_mat), columns=["Pred. [+]", "Pred. [-]"], index=["Actual [+]", "Actual [-]"]))
+    print(pd.DataFrame(np.flip(confusion_mat), columns=["Pred. [+]", "Pred. [-]"], index=["Actual [+]", "Actual [-]"]))
     # returns parameters in the following order: tn, fp, fn, tp
     return confusion_mat.ravel()
 
@@ -86,7 +86,7 @@ def get_rates_from_confusion_matrix(confusion_mat):
     fnr = round(FN/total_positives*100, 2)
     fpr = round(FP/total_negatives*100, 2)
     precision = round(TP/(TP+FP)*100, 2)
-    # print(pd.DataFrame(dict(tpr=tpr, fpr=fpr, tnr=tnr, fnr=fnr, precision=precision), index=[0]))
+    print(pd.DataFrame(dict(tpr=tpr, fpr=fpr, tnr=tnr, fnr=fnr, precision=precision), index=[0]))
     return tpr, fpr, tnr, fnr, precision
 
 
@@ -121,7 +121,7 @@ class IntraEpochMetricsTracker:
 
 
     def get_epoch_metrics(self):
-        # print("##########################################################################\n")
+        print("##########################################################################\n")
         confusion_mat = get_confusion_matrix_parameters(self.labels, self.predictions)
         tpr, fpr, tnr, fnr, precision = get_rates_from_confusion_matrix(confusion_mat)
         recall = tpr
@@ -138,22 +138,31 @@ class IntraEpochMetricsTracker:
                            auc_prec_recall=self.get_auc_precision_recall(),
                            precision=precision,
                            f1_score=f1_score)
-        # print("\n##########################################################################")
+        print("\n##########################################################################")
         return metric_dict
 
 
     def get_aucroc(self):
-        fpr, tpr, thresh = roc_curve(self.labels, self.predictions)
+        # using mixup, the resulting labels are no longer binary but continous between 0 and 1
+        # we round to get any kind of result but for the training data, the auc-roc is not quite meaningful
+        labels = np.round(self.labels)
+        fpr, tpr, thresh = roc_curve(labels, self.predictions)
         aucroc = auc(fpr, tpr)
         return aucroc
 
     def get_auc_precision_recall(self):
-        precision, recall, _ = precision_recall_curve(self.labels, self.predictions)
+        # using mixup, the resulting labels are no longer binary but continous between 0 and 1
+        # we round to get any kind of result but for the training data, the auc-roc is not quite meaningful
+        labels = np.round(self.labels)
+        precision, recall, _ = precision_recall_curve(labels, self.predictions)
         auc_preision_recall = auc(recall, precision)
         return auc_preision_recall
 
     def get_tpr_at_sensitivity(self, sensitivity_target=0.95):
-        fpr, tpr, thresh = roc_curve(self.labels, self.predictions)
+        # using mixup, the resulting labels are no longer binary but continous between 0 and 1
+        # we round to get any kind of result but for the training data, the auc-roc is not quite meaningful
+        labels = np.round(self.labels)
+        fpr, tpr, thresh = roc_curve(labels, self.predictions)
         sensitivity = 1 - fpr
         distance_to_target_sensitivity = np.abs(sensitivity - sensitivity_target)
         closest_index = np.argmin(distance_to_target_sensitivity)

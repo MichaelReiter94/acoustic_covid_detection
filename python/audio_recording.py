@@ -66,10 +66,12 @@ def get_15_MFCCs(audio, sr):
     if target_sr != sr:
         audio = librosa.resample(y=audio, orig_sr=sr, target_sr=target_sr)
 
-    hop_size = 512
-    nfft = 2048
+    hop_size = 256
+    window_length = 512
+    nfft = 512*16
     n_MFCCs = 15
-    mfccs = librosa.feature.mfcc(y=audio, n_fft=nfft, hop_length=hop_size, n_mfcc=n_MFCCs, sr=target_sr)
+    mfccs = librosa.feature.mfcc(y=audio, win_length=window_length, n_fft=nfft, htk=True, fmax=target_sr / 2, fmin=0,
+                                 hop_length=hop_size, n_mfcc=n_MFCCs, sr=target_sr, n_mels=224)
     return mfccs
 
 
@@ -93,8 +95,8 @@ class AudioRecording:
         if self.augmentations is not None:
             audio = self.augmentations(audio, self.original_sr)
 
-        # self.MFCCs = get_15_MFCCs(audio, sr=self.original_sr)
-        self.logmel = get_logmel_spectrum(audio, self.original_sr)
+        self.MFCCs = get_15_MFCCs(audio, sr=self.original_sr)
+        # self.logmel = get_logmel_spectrum(audio, self.original_sr)
         # self.logmel_3c = get_3_channel_logmel_spectrum(audio, self.original_sr)
 
     def get_audio(self, trim_silence_below_x_dB=48):
