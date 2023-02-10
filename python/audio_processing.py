@@ -40,15 +40,15 @@ def create_participant_objects(save_to: str,
                 for _ in range(augmentations_per_label[label]):
                     participants.append(Participant(ID, augmentations=augmentations))
             except ValueError as e:
-                # length of recording is 0
-                # or no valid covid label
+                # length of recording is 0, or no valid covid label
                 error_ids_zero_length.append(ID)
                 errors[type(e).__name__] = {"error_description": e.args[0],
                                             "error_meaning": "length of the audio file = 0 or the user does not have a "
                                                              "valid covid label/test",
                                             "id_list": error_ids_zero_length}
             except librosa.util.exceptions.ParameterError as e:
-                # all values in the audio file are 0 (but the length is > 0) resulting in NaN when normalizing with 0 as max
+                # all values in the audio file are 0 (but the length is > 0) resulting in NaN when normalizing with 0
+                # as max
                 error_ids_all_zeros.append(ID)
                 errors[type(e).__name__] = {"error_description": e.args[0],
                                             "error_meaning": "All values in audio file are 0",
@@ -73,7 +73,8 @@ time_domain_augmentations = Compose([
 participant_ids = os.listdir("data/Coswara_processed/Recordings")
 metadata = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
 
-create_participant_objects(save_to="2022-12-13_MFCCs_original_highTimeRes",
-                           augmentations=None,
+# TODO include automatic new date
+create_participant_objects(save_to="2023-01-30_MFCCs_augment_highTimeRes_breath",
+                           augmentations=time_domain_augmentations,
                            augmentations_per_label=(1, 4))
 

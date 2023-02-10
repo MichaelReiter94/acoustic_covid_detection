@@ -1,7 +1,7 @@
 from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50
 from evaluation_and_tracking import IntraEpochMetricsTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift
-from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, ResnetLogmel3Channels, ResnetLogmel1ChannelBreath,\
+from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, ResnetLogmel3Channels, ResnetLogmel1ChannelBreath, \
     BrogrammersMfccHighRes
 from datetime import datetime
 import time
@@ -19,8 +19,12 @@ from itertools import product
 import os
 import random
 from torch.optim.lr_scheduler import ExponentialLR
+import tkinter as tk
+from tkinter.messagebox import askyesno
 
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+TESTING_MODE = not torch.cuda.is_available()
 # <editor-fold desc="function definitions">
 
 
@@ -131,6 +135,13 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
     train_ids = pos_ids_train + neg_ids_train
     validation_ids = pos_ids_val + neg_ids_val
 
+    if QUICK_TRAIN_FOR_TESTS:
+        np.random.shuffle(train_ids)
+        train_ids = train_ids[:200]
+        np.random.shuffle(validation_ids)
+        validation_ids = validation_ids[:50]
+
+
     training_set = DatasetClass(user_ids=train_ids, original_files=dataset_dict["participants_file"],
                                 transform=transform, augmented_files=dataset_dict["augmented_files"],
                                 augmentations=train_augmentation, verbose=VERBOSE, mode="train")
@@ -140,10 +151,9 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
 
 
 def get_data_loaders(training_set, validation_set):
-
     # create weighted random sampler
     label_counts = training_set.label_counts()[1]
-    label_weights = np.flip(label_counts/np.sum(label_counts))
+    label_weights = np.flip(label_counts / np.sum(label_counts))
 
     # sample_weights = []
     # for (data, label) in training_set:
@@ -202,9 +212,8 @@ def get_optimizer(model_name, load_from_disc=False):
 
 
 def write_metrics_to_tensorboard(mode):
+    metrics = tracker.get_epoch_metrics()
     if TRACK_METRICS:
-        # loss, acc, aucroc, tpr_at_95, auc_pr = tracker.get_epoch_metrics()
-        metrics = tracker.get_epoch_metrics()
         writer.add_scalar(f"01_loss/{mode}", metrics["loss"], epoch)
         writer.add_scalar(f"02_accuracy/{mode}", metrics["accuracy"], epoch)
         writer.add_scalar(f"03_AUC-ROC/{mode}", metrics["auc_roc"], epoch)
@@ -222,27 +231,31 @@ def get_online_augmentations(run_parameters):
     else:
         augmentation = Compose([AddGaussianNoise(0, run_parameters.sigma)])
     return augmentation
+
+
 # </editor-fold>
 
-
-# ###############################################  manual setup  #######################################################
 random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
                 66445511337, 316497938271, 161094, 191919191, 101010107]
 
-n_epochs = 40
-n_cross_validation_runs = 1
+# ###############################################  manual setup  #######################################################
+
+QUICK_TRAIN_FOR_TESTS = False
+
+n_epochs = 75
+n_cross_validation_runs = 5
 
 parameters = dict(
-    rand=random_seeds[:n_cross_validation_runs],
-    batch=[128],
-    lr=[1e-3],
-    wd=[5e-4],
+    # rand=random_seeds[:n_cross_validation_runs],
+    batch=[32, 128],
+    lr=[1e-4, 5e-4, 1e-3],
+    wd=[1e-3, 1e-4],
     sigma=[0],
     shift=[True],
     # weight=[1],
     lr_decay=[0.85, 0.9]
 )
-# lr_decay = 0.95
+
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
@@ -250,8 +263,8 @@ augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 MODEL_NAME = "brogrammers"
 # logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath
 # 15_mfccs, 15_mfccs_highRes
-DATASET_NAME = "15_mfccs_highRes"
-RUN_COMMENT = f"tests_mixup"
+DATASET_NAME = "15_mfccs"
+RUN_COMMENT = f"trackerclasstest actual hyperparameter run"
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -260,57 +273,66 @@ RUN_NAME = f"{date}_{MODEL_NAME}_{DATASET_NAME}_{RUN_COMMENT}"
 VERBOSE = True
 LOAD_FROM_DISC = False
 SAVE_TO_DISC = False
-TRACK_METRICS = True
+
+if device == "cpu":
+    window = tk.Tk()
+    TRACK_METRICS = askyesno(title='Tracking Settings',
+                             message=f'Do you want to track this run?\nIt will be saved as: {RUN_NAME}')
+    window.destroy()
+else:
+    TRACK_METRICS = True
 
 # ############################################ setup ###################################################################
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
+tracker = IntraEpochMetricsTracker(verbose=TESTING_MODE)  # verbose only for testing on the PC with CPU
 for p in get_parameter_combinations(parameters):
+    tracker.setup_run_with_new_params(p)
+    for random_seed in random_seeds[:n_cross_validation_runs]:
+        tracker.start_run_with_random_seed(random_seed)
+        train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
+                                          train_augmentation=augmentations, random_seed=random_seed)
 
-    train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
-                                      train_augmentation=augmentations, random_seed=p.rand)
+        train_set.augmentations = get_online_augmentations(p)
+        if TRACK_METRICS:
+            writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
 
-    train_set.augmentations = get_online_augmentations(p)
-    if TRACK_METRICS:
-        writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
+        train_loader, eval_loader = get_data_loaders(train_set, val_set)
+        my_cnn = get_model(MODEL_NAME, load_from_disc=LOAD_FROM_DISC, verbose=False)
 
-    train_loader, eval_loader = get_data_loaders(train_set, val_set)
-    my_cnn = get_model(MODEL_NAME, load_from_disc=LOAD_FROM_DISC, verbose=False)
+        optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
+        lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
+        # loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.weight])).to(device)
+        loss_func = nn.BCEWithLogitsLoss().to(device)
+        # ################################################ training ####################################################
+        epoch_start = time.time()
+        for epoch in range(n_epochs):
 
-    optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
-    lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
-    tracker = IntraEpochMetricsTracker()
-    # loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.weight])).to(device)
-    loss_func = nn.BCEWithLogitsLoss().to(device)
-    # ################################################ training ########################################################
+            tracker.reset(p, mode="train")
+            for i, batch in enumerate(train_loader):
+                train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
+            write_metrics_to_tensorboard(mode="train")
 
-    epoch_start = time.time()
-    for epoch in range(n_epochs):
+            with torch.no_grad():
+                tracker.reset(p, mode="eval")
+                for i, batch in enumerate(eval_loader):
+                    evaluate_batch(my_cnn, batch, loss_func, tracker)
+                write_metrics_to_tensorboard(mode="eval")
+            lr_scheduler.step()
+            if TESTING_MODE:
+                print(f"current learning rates: {[round(lr, 8) for lr in lr_scheduler.get_last_lr()]}")
+        # ##############################################################################################################
+        if VERBOSE or True:
+            delta_t = time.time() - epoch_start
+            print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
 
+if TRACK_METRICS:
+    writer.close()
+    with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
+        pickle.dump(tracker, f)
 
-        tracker.reset()
-        for i, batch in enumerate(train_loader):
-            train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
-        write_metrics_to_tensorboard(mode="train")
-
-        with torch.no_grad():
-            tracker.reset()
-            for i, batch in enumerate(eval_loader):
-                evaluate_batch(my_cnn, batch, loss_func, tracker)
-            write_metrics_to_tensorboard(mode="eval")
-        lr_scheduler.step()
-        print(f"current learning rates: {[round(lr, 8) for lr in lr_scheduler.get_last_lr()]}")
-    # ##################################################################################################################
-    if VERBOSE or True:
-        delta_t = time.time() - epoch_start
-        print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
-
-    if TRACK_METRICS:
-        writer.close()
-    if SAVE_TO_DISC:
-        print("saving new model!")
-        MODEL_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/model.pth"
-        torch.save(my_cnn.state_dict(), MODEL_PATH)
-        # optimizer.zero_grad()
-        OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
-        torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
+if SAVE_TO_DISC:
+    print("saving new model!")
+    MODEL_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/model.pth"
+    torch.save(my_cnn.state_dict(), MODEL_PATH)
+    # optimizer.zero_grad()
+    OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
+    torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
