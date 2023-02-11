@@ -17,50 +17,123 @@ from participant import Participant
 import pickle
 from tqdm import tqdm
 import pandas as pd
-
+from datetime import datetime
 # </editor-fold>
+# def create_participant_objects(save_to: str,
+#                                augmentations=None,
+#                                augmentations_per_label=(1, 1),
+#                                UPDATE_INVALID_RECORDINGS=False):
+#     # no oversampling when there are no augmentations specified
+#     if augmentations is None:
+#         augmentations_per_label = (1, 1)
+#
+#     error_ids_zero_length, error_ids_all_zeros, error_ids_unknown, participants, errors = [], [], [], [], {}
+#     for ID in tqdm(participant_ids):
+#         participant_metadata = metadata[metadata["user_id"] == ID]
+#         # print(participant_metadata["audio_quality_heavy_cough"].item())
+#         # if participant_metadata["audio_quality_deep_breathing"].item() > 0:
+#         if participant_metadata["audio_quality_heavy_cough"].item() > 0:
+#             try:
+#                 label = int(participant_metadata.covid_label)
+#                 for _ in range(augmentations_per_label[label]):
+#                     participants.append(Participant(ID, augmentations=augmentations))
+#             except ValueError as e:
+#                 # length of recording is 0, or no valid covid label
+#                 error_ids_zero_length.append(ID)
+#                 errors[type(e).__name__] = {"error_description": e.args[0],
+#                                             "error_meaning": "length of the audio file = 0 or the user does not have a "
+#                                                              "valid covid label/test",
+#                                             "id_list": error_ids_zero_length}
+#             except librosa.util.exceptions.ParameterError as e:
+#                 # all values in the audio file are 0 (but the length is > 0) resulting in NaN when normalizing with 0
+#                 # as max
+#                 error_ids_all_zeros.append(ID)
+#                 errors[type(e).__name__] = {"error_description": e.args[0],
+#                                             "error_meaning": "All values in audio file are 0",
+#                                             "id_list": error_ids_all_zeros}
+#
+#     if UPDATE_INVALID_RECORDINGS:
+#         with open("data/Coswara_processed/pickles/invalid_recordings.pickle", "wb") as f:
+#             pickle.dump(errors, f)
+#
+#     print(f"saving {len(participants)} instances\n")
+#     with open(f"data/Coswara_processed/pickles/{save_to}.pickle", "wb") as f:
+#         pickle.dump(participants, f)
 
 
-def create_participant_objects(save_to: str,
-                               augmentations=None,
-                               augmentations_per_label=(1, 1),
-                               UPDATE_INVALID_RECORDINGS=False):
-    # no oversampling when there are no augmentations specified
-    if augmentations is None:
-        augmentations_per_label = (1, 1)
+class FeatureSet:
+    def __init__(self, type_of_recording, audio_params):
+        self.types_of_recording = type_of_recording  # cough-heavy | breathing-deep | ... or a list of them!
+        self.audio_parameters = audio_params
+        self.augmentations = None
+        self.augmentations_per_label = None  # labels(0,1) meaning (neg, pos)
+        self.participants = []
+        # # nfft, window_length, hop size in SECONDS/MILLISECONDS
+        # # fft_frequency resolution
+        # # total duration of one sample
 
-    error_ids_zero_length, error_ids_all_zeros, error_ids_unknown, participants, errors = [], [], [], [], {}
-    for ID in tqdm(participant_ids):
-        participant_metadata = metadata[metadata["user_id"] == ID]
-        # print(participant_metadata["audio_quality_heavy_cough"].item())
-        # if participant_metadata["audio_quality_deep_breathing"].item() > 0:
-        if participant_metadata["audio_quality_heavy_cough"].item() > 0:
-            try:
-                label = int(participant_metadata.covid_label)
-                for _ in range(augmentations_per_label[label]):
-                    participants.append(Participant(ID, augmentations=augmentations))
-            except ValueError as e:
-                # length of recording is 0, or no valid covid label
-                error_ids_zero_length.append(ID)
-                errors[type(e).__name__] = {"error_description": e.args[0],
-                                            "error_meaning": "length of the audio file = 0 or the user does not have a "
-                                                             "valid covid label/test",
-                                            "id_list": error_ids_zero_length}
-            except librosa.util.exceptions.ParameterError as e:
-                # all values in the audio file are 0 (but the length is > 0) resulting in NaN when normalizing with 0
-                # as max
-                error_ids_all_zeros.append(ID)
-                errors[type(e).__name__] = {"error_description": e.args[0],
-                                            "error_meaning": "All values in audio file are 0",
-                                            "id_list": error_ids_all_zeros}
+        self.is_augmented = None
+        # # def summarize():
 
-    if UPDATE_INVALID_RECORDINGS:
-        with open("data/Coswara_processed/pickles/invalid_recordings.pickle", "wb") as f:
-            pickle.dump(errors, f)
+    def create_participant_objects(self, augmentations=None,
+                                   augmentations_per_label=(1, 1),
+                                   UPDATE_INVALID_RECORDINGS=False):
+        self.augmentations = augmentations
+        participant_ids = os.listdir("data/Coswara_processed/Recordings")
+        metadata = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
+        self.participants = []
 
-    print(f"saving {len(participants)} instances\n")
-    with open(f"data/Coswara_processed/pickles/{save_to}.pickle", "wb") as f:
-        pickle.dump(participants, f)
+        # no oversampling when there are no augmentations specified
+        if augmentations is None:
+            augmentations_per_label = (1, 1)
+            self.is_augmented = True
+        else:
+            self.is_augmented = False
+
+        self.augmentations_per_label = augmentations_per_label
+
+        error_ids_zero_length, error_ids_all_zeros, error_ids_unknown, errors = [], [], [], {}
+        for ID in tqdm(participant_ids):
+            participant_metadata = metadata[metadata["user_id"] == ID]
+
+            # if participant_metadata["audio_quality_deep_breathing"].item() > 0:
+            if participant_metadata["audio_quality_heavy_cough"].item() > 0:  # TODO add other types of recording
+                try:
+                    label = int(participant_metadata.covid_label)
+                    for _ in range(self.augmentations_per_label[label]):
+                        self.participants.append(Participant(ID,
+                                                             type_of_recording=self.types_of_recording,
+                                                             audio_params=self.audio_parameters,
+                                                             augmentations=augmentations))
+                except ValueError as e:
+                    # length of recording is 0, or no valid covid label
+                    error_ids_zero_length.append(ID)
+                    errors[type(e).__name__] = {"error_description": e.args[0],
+                                                "error_meaning": "length of the audio file = 0 or the user does not "
+                                                                 "have a "
+                                                                 "valid covid label/test",
+                                                "id_list": error_ids_zero_length}
+                except librosa.util.exceptions.ParameterError as e:
+                    # all values in the audio file are 0 (but the length is > 0) resulting in NaN when normalizing with
+                    # 0 as max
+                    error_ids_all_zeros.append(ID)
+                    errors[type(e).__name__] = {"error_description": e.args[0],
+                                                "error_meaning": "All values in audio file are 0",
+                                                "id_list": error_ids_all_zeros}
+
+        if UPDATE_INVALID_RECORDINGS:
+            with open("data/Coswara_processed/pickles/invalid_recordings.pickle", "wb") as f:
+                pickle.dump(errors, f)
+
+    def save_to(self, save_to):
+        print(f"saving {len(self.participants)} participant instances\n")
+        date = datetime.today().strftime("%Y_%m_%d")
+        append = ""
+        if self.augmentations is not None:
+            append = "_augmented"
+
+        with open(f"data/Coswara_processed/pickles/{date}_{save_to}{append}.pickle", "wb") as f:
+            pickle.dump(self, f)
 
 
 time_domain_augmentations = Compose([
@@ -69,30 +142,21 @@ time_domain_augmentations = Compose([
     TimeStretch(min_rate=0.85, max_rate=1.15, leave_length_unchanged=False, p=0.8),
     Gain(min_gain_in_db=-40, max_gain_in_db=16, p=0.8)
 ])
+all_types_of_recording = ["cough-heavy", "cough-shallow", "breathing-deep", "breathing-shallow", "counting-fast",
+                          "counting-normal", "vowel-a", "vowel-e", "vowel-o"]
+audio_parameters = dict(
+    type_of_features="mfcc",  # logmel | mfcc
+    n_time_steps=259,  # 259 | 224
+    n_features=15,  # 15 | 224
+    sample_rate=22050,
+    n_fft=512 * 16,
+    window_length=512,
+    hop_size=256,
+    fmin=0,
+    fmax=22050 // 2
+)
 
-participant_ids = os.listdir("data/Coswara_processed/Recordings")
-metadata = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
-
-# TODO include automatic new date
-create_participant_objects(save_to="2023-01-30_MFCCs_augment_highTimeRes_breath",
-                           augmentations=time_domain_augmentations,
-                           augmentations_per_label=(1, 4))
-
-
-
-class FeatureSet:
-    def __init__(self, type_of_features, n_time):
-        # type of features
-        # n_time_steps
-        # n_features
-        # sample rate
-        # nfft, window_length, hop size
-        # nfft, window_length, hop size in SECONDS/MILISECONDS
-        # total duration of one sample
-        # def summarize():
-        # def create_participants[]
-
-        # augmented
-        # augmentations
-        # def save_to()
-        # augmentations per label
+if __name__ == "__main__":
+    feature_set = FeatureSet("breathing-deep", audio_parameters)
+    feature_set.create_participant_objects(augmentations=time_domain_augmentations, augmentations_per_label=(1, 4))
+    feature_set.save_to("breathing_corrected")
