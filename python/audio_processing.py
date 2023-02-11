@@ -157,6 +157,7 @@ audio_parameters = dict(
 )
 
 if __name__ == "__main__":
-    feature_set = FeatureSet("breathing-deep", audio_parameters)
-    feature_set.create_participant_objects(augmentations=time_domain_augmentations, augmentations_per_label=(1, 4))
-    feature_set.save_to("breathing_corrected")
+    feature_set = FeatureSet("cough-heavy", audio_parameters)
+    feature_set.create_participant_objects(augmentations=time_domain_augmentations,
+                                           augmentations_per_label=(1, 4))
+    feature_set.save_to("cough_15mfcc_highres")
