@@ -28,10 +28,12 @@ def load_tracker():
     print(f"Loading Tracker from: {path}")
     with open(path, "rb") as f:
         tracker = pickle.load(f)
-    tracker.compute_overall_metrics(smooth_n_samples=5, ignore_first_n_epochs=5,
-                                    metric_used_for_performance_analysis="auc_roc")
 
-    print(f"\nTracker contains:\n>>  {tracker.n_hyperparameter_runs} <<  parameter runs\n"
-          f">>  {tracker.k_folds_for_cross_validation} <<  folds per run\n"
-          f">> {tracker.n_epochs} <<  epochs")
+    tracker.compute_overall_metrics(smooth_n_samples=10, ignore_first_n_epochs=5,
+                                    metric_used_for_performance_analysis="auc_roc")
+    tracker.summarize()
+
+    # print(f"\nTracker contains:\n>>  {tracker.n_hyperparameter_runs} <<  parameter runs\n"
+    #       f">>  {tracker.k_folds_for_cross_validation} <<  folds per run\n"
+    #       f">> {tracker.n_epochs} <<  epochs")
     return tracker

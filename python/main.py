@@ -22,9 +22,50 @@ from torch.optim.lr_scheduler import ExponentialLR
 import tkinter as tk
 from tkinter.messagebox import askyesno
 
-
+dataset_collection = {
+    "15_mfccs": {
+        "dataset_class": BrogrammersMFCCDataset,
+        "participants_file": "participants_validLabelsOnly.pickle",
+        "augmented_files": ["participants_oversampledPositives.pickle"],
+        # "augmented_files": None
+    },
+    "15_mfccs_highRes": {
+        # higher time resolution and MFCCS calculated from higher frequency resolution
+        # "dataset_class": BrogrammersMfccHighRes,
+        "dataset_class": BrogrammersMFCCDataset,
+        "participants_file": "2022-12-13_MFCCs_original_highTimeRes.pickle",
+        "augmented_files": ["2022-12-13_MFCCs_augmented_highTimeRes.pickle"],
+        # "augmented_files": None
+    },
+    "logmel_1_channel": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2022-11-25-added_logmel224x224_no_augmentations.pickle",
+        "augmented_files": ["2022-11-25-added_logmel224x224.pickle"]
+        # "augmented_files": None
+    },
+    "logmel_3_channels_512_2048_8192": {
+        "dataset_class": ResnetLogmel3Channels,
+        "participants_file": "2022-12-08_logmel_3_channel_noAug_noBadAudio.pickle",
+        "augmented_files": ["2022-12-08_logmel_3_channel_augmented_noBadAudio.pickle"]
+        # "augmented_files": None
+    },
+    "logmel_3_channels_1024_2048_4096": {
+        "dataset_class": ResnetLogmel3Channels,
+        "participants_file": "2022-12-10_logmel_3_channel_noAug_1024x2048x4096.pickle",
+        "augmented_files": ["2022-12-10_logmel_3_channel_augmented_1024x2048x4096.pickle"]
+        # "augmented_files": None
+    },
+    "logmel_1_channel_breath": {
+        "dataset_class": ResnetLogmel1ChannelBreath,
+        "participants_file": "2022-12-11_logmel_1_channel_noAug_heavy_breathing.pickle",
+        "augmented_files": ["2022-12-11_logmel_1_channel_augmented_heavy_breathing.pickle"]
+        # "augmented_files": None
+    }
+}
 device = "cuda" if torch.cuda.is_available() else "cpu"
 TESTING_MODE = not torch.cuda.is_available()
+
+
 # <editor-fold desc="function definitions">
 
 
@@ -85,47 +126,7 @@ def randomly_split_list_into_two(input_list, ratio=0.8, random_seed=None):
     return input_list_temp[:split_index], input_list_temp[split_index:]
 
 
-def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentation=None, random_seed=None):
-    dataset_collection = {
-        "15_mfccs": {
-            "dataset_class": BrogrammersMFCCDataset,
-            "participants_file": "participants_validLabelsOnly.pickle",
-            "augmented_files": ["participants_oversampledPositives.pickle"],
-            # "augmented_files": None
-        },
-        "15_mfccs_highRes": {
-            # higher time resolution and MFCCS calculated from higher frequency resolution
-            # "dataset_class": BrogrammersMfccHighRes,
-            "dataset_class": BrogrammersMFCCDataset,
-            "participants_file": "2022-12-13_MFCCs_original_highTimeRes.pickle",
-            "augmented_files": ["2022-12-13_MFCCs_augmented_highTimeRes.pickle"],
-            # "augmented_files": None
-        },
-        "logmel_1_channel": {
-            "dataset_class": ResnetLogmelDataset,
-            "participants_file": "2022-11-25-added_logmel224x224_no_augmentations.pickle",
-            "augmented_files": ["2022-11-25-added_logmel224x224.pickle"]
-            # "augmented_files": None
-        },
-        "logmel_3_channels_512_2048_8192": {
-            "dataset_class": ResnetLogmel3Channels,
-            "participants_file": "2022-12-08_logmel_3_channel_noAug_noBadAudio.pickle",
-            "augmented_files": ["2022-12-08_logmel_3_channel_augmented_noBadAudio.pickle"]
-            # "augmented_files": None
-        },
-        "logmel_3_channels_1024_2048_4096": {
-            "dataset_class": ResnetLogmel3Channels,
-            "participants_file": "2022-12-10_logmel_3_channel_noAug_1024x2048x4096.pickle",
-            "augmented_files": ["2022-12-10_logmel_3_channel_augmented_1024x2048x4096.pickle"]
-            # "augmented_files": None
-        },
-        "logmel_1_channel_breath": {
-            "dataset_class": ResnetLogmel1ChannelBreath,
-            "participants_file": "2022-12-11_logmel_1_channel_noAug_heavy_breathing.pickle",
-            "augmented_files": ["2022-12-11_logmel_1_channel_augmented_heavy_breathing.pickle"]
-            # "augmented_files": None
-        }
-    }
+def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentation=None, random_seed=None, params=None):
     dataset_dict = dataset_collection[dataset_name]
     DatasetClass = dataset_dict["dataset_class"]
 
@@ -141,16 +142,23 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
         np.random.shuffle(validation_ids)
         validation_ids = validation_ids[:50]
 
+    if not params.use_augm_datasets:
+        augmented_datasets = None
+    else:
+        augmented_datasets = dataset_dict["augmented_files"]
 
     training_set = DatasetClass(user_ids=train_ids, original_files=dataset_dict["participants_file"],
-                                transform=transform, augmented_files=dataset_dict["augmented_files"],
+                                transform=transform, augmented_files=augmented_datasets,
                                 augmentations=train_augmentation, verbose=VERBOSE, mode="train")
     validation_set = DatasetClass(user_ids=validation_ids, original_files=dataset_dict["participants_file"],
                                   transform=transform, verbose=VERBOSE, mode="eval")
+
+    training_set.mix_up_alpha = params.mixup_a
+    training_set.mix_up_probability = params.mixup_p
     return training_set, validation_set
 
 
-def get_data_loaders(training_set, validation_set):
+def get_data_loaders(training_set, validation_set, params):
     # create weighted random sampler
     label_counts = training_set.label_counts()[1]
     label_weights = np.flip(label_counts / np.sum(label_counts))
@@ -165,8 +173,10 @@ def get_data_loaders(training_set, validation_set):
     sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
 
     # create dataloaders
-    # train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True)
-    train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler)
+    if params.weighted_sampler:
+        train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler)
+    else:
+        train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True)
     val = DataLoader(dataset=validation_set, batch_size=len(val_set))
     return train, val
 
@@ -242,18 +252,22 @@ random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
 
 QUICK_TRAIN_FOR_TESTS = False
 
-n_epochs = 75
+n_epochs = 50
 n_cross_validation_runs = 5
 
 parameters = dict(
     # rand=random_seeds[:n_cross_validation_runs],
-    batch=[32, 128],
-    lr=[1e-4, 5e-4, 1e-3],
-    wd=[1e-3, 1e-4],
-    sigma=[0],
+    batch=[64, 128],
+    lr=[1e-3, 1e-4, 1e-5],
+    wd=[1e-2, 1e-4, 0],  # weight decay regularization
+    lr_decay=[1.0],
+    mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples will be used
+    mixup_p=[0.0],  # pobability of mixup being used at all
+    use_augm_datasets=[True, False],
     shift=[True],
-    # weight=[1],
-    lr_decay=[0.85, 0.9]
+    sigma=[0.05],
+    weighted_sampler=[True, False],  # wether or not to use a weighted random sampler to adress the class imbalance
+    class_weight=[1, 1.3, 1.6],  # factor for loss of the positive class to adress class imbalance
 )
 
 transforms = None
@@ -264,7 +278,7 @@ MODEL_NAME = "brogrammers"
 # logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath
 # 15_mfccs, 15_mfccs_highRes
 DATASET_NAME = "15_mfccs"
-RUN_COMMENT = f"trackerclasstest actual hyperparameter run"
+RUN_COMMENT = f"class_weight_and_weighted_sampler"
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -283,25 +297,26 @@ else:
     TRACK_METRICS = True
 
 # ############################################ setup ###################################################################
-tracker = IntraEpochMetricsTracker(verbose=TESTING_MODE)  # verbose only for testing on the PC with CPU
+tracker = IntraEpochMetricsTracker({DATASET_NAME: dataset_collection[DATASET_NAME]}, verbose=TESTING_MODE)
 for p in get_parameter_combinations(parameters):
     tracker.setup_run_with_new_params(p)
     for random_seed in random_seeds[:n_cross_validation_runs]:
         tracker.start_run_with_random_seed(random_seed)
         train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
-                                          train_augmentation=augmentations, random_seed=random_seed)
+                                          train_augmentation=augmentations, random_seed=random_seed, params=p)
 
         train_set.augmentations = get_online_augmentations(p)
         if TRACK_METRICS:
             writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
 
-        train_loader, eval_loader = get_data_loaders(train_set, val_set)
+        train_loader, eval_loader = get_data_loaders(train_set, val_set, p)
         my_cnn = get_model(MODEL_NAME, load_from_disc=LOAD_FROM_DISC, verbose=False)
 
         optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
         lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
-        # loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.weight])).to(device)
-        loss_func = nn.BCEWithLogitsLoss().to(device)
+        loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight])).to(device)
+        # loss_func = nn.BCEWithLogitsLoss().to(device)
+        tracker.save_model_and_training_parameters(my_cnn, optimizer, loss_func)
         # ################################################ training ####################################################
         epoch_start = time.time()
         for epoch in range(n_epochs):
@@ -320,7 +335,7 @@ for p in get_parameter_combinations(parameters):
             if TESTING_MODE:
                 print(f"current learning rates: {[round(lr, 8) for lr in lr_scheduler.get_last_lr()]}")
         # ##############################################################################################################
-        if VERBOSE or True:
+        if VERBOSE:
             delta_t = time.time() - epoch_start
             print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
 

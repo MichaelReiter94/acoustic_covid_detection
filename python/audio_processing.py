@@ -78,3 +78,21 @@ create_participant_objects(save_to="2023-01-30_MFCCs_augment_highTimeRes_breath"
                            augmentations=time_domain_augmentations,
                            augmentations_per_label=(1, 4))
 
+
+
+class FeatureSet:
+    def __init__(self, type_of_features, n_time):
+        # type of features
+        # n_time_steps
+        # n_features
+        # sample rate
+        # nfft, window_length, hop size
+        # nfft, window_length, hop size in SECONDS/MILISECONDS
+        # total duration of one sample
+        # def summarize():
+        # def create_participants[]
+
+        # augmented
+        # augmentations
+        # def save_to()
+        # augmentations per label

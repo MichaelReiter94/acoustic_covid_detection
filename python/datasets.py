@@ -49,6 +49,10 @@ class CustomDataset(Dataset):
         if verbose:
             self.summarize()
 
+        self.mix_up_alpha = 0.2
+        self.mix_up_probability = 1.0
+
+
     def drop_invalid_labels(self):
         self.participants = [participant for participant in self.participants if participant.get_label() is not None]
 
@@ -73,7 +77,7 @@ class CustomDataset(Dataset):
 
         output_label = self.participants[idx].get_label()
 
-        if self.mode == "train" and np.random.rand() < 0.33:
+        if self.mode == "train" and np.random.rand() < self.mix_up_probability:
             # only use mixup on every third sample --> hyperparameter (maybe make dependent on epoch/learning rate
             # probability = 1-np.float_power(epoch, -0.3)
             input_features, output_label = self.mix_up(orig_sample=input_features, orig_label=output_label)
@@ -132,8 +136,8 @@ class CustomDataset(Dataset):
 
         mixup_label = self.participants[mixup_idx].get_label()
 
-        alpha = 0.2
-        lamda = np.random.beta(alpha, alpha)
+        # alpha = 0.2
+        lamda = np.random.beta(self.mix_up_alpha, self.mix_up_alpha)
         mixed_up_label = lamda * orig_label + (1 - lamda) * mixup_label
         mixed_up_sample = lamda * orig_sample + (1 - lamda) * mixup_sample
         return mixed_up_sample, mixed_up_label

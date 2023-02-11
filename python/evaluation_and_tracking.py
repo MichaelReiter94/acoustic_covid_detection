@@ -71,6 +71,21 @@ metrics_to_minimize = ("loss", "fpr", "fnr")
 metrics_to_maximize = ("auc_roc", "accuracy", "f1_score", "auc_prec_recall", "precision", "tpr_at_95", "tpr", "tnr")
 
 
+def pretty_print_dict(dictionary):
+    for k, v in dictionary.items():
+        offset = 30 - len(k)
+        offset = " " * offset
+        print(f"           {k}:{offset}{v}")
+
+
+def highlight_cells(x):
+    return 'background-color: ' + x.map({'True': "#08306b", 'False': 'white'})
+
+
+def set_font_color(x):
+    return 'color: ' + x.map({'True': 'white', 'False': 'black'})
+
+
 def rgba_plotly(c, opacity=1.0):
     return f"rgba({c[0]},{c[1]},{c[2]},{opacity})"
 
@@ -339,9 +354,8 @@ def get_rates_from_confusion_matrix(confusion_mat, verbose=False):
 
 
 class IntraEpochMetricsTracker:
-    def __init__(self, verbose):
-        # self.metrics = ["loss", "accuracy", "tpr", "fpr", "tnr", "fnr", "precision", "recall", "F1", "auc-roc",
-        #                 "auc-prec-recall"]
+    def __init__(self, datasets, verbose):
+        self.datasets = datasets
         self.metrics_used = ["auc_roc", "loss", "accuracy", "f1_score", "auc_prec_recall",
                              "precision", "tpr_at_95", "tpr", "tnr", "fpr", "fnr"]
         self.loss = np.array([])
@@ -350,21 +364,20 @@ class IntraEpochMetricsTracker:
         self.mode = ""
         self.crossval_runs = []
         self.current_run = None
-        # settings for calculations and analysis later:
-        # self.ignore_first_n_epochs = 5
-        # self.metric_for_performance_analysis = "auc_roc"
         self.performance_eval_params = dict(
             smoothing=5,
             metric_used="auc_roc",
             ignore_first_n_epochs=5
         )
         self.verbose = verbose
+        self.model_and_training_parameters = {}
         self.n_epochs = None
         self.n_hyperparameter_runs = None
         self.k_folds_for_cross_validation = None
         self.full_metric_performance_df = None  # only for evaluation set/validation set
         self.compact_metric_performance_df = None
         self.run_ids = None
+        self.hyperparameters = None
 
     def compute_overall_metrics(self, metric_used_for_performance_analysis="auc_roc",
                                 smooth_n_samples=5, ignore_first_n_epochs=5):
@@ -392,7 +405,9 @@ class IntraEpochMetricsTracker:
         self.n_hyperparameter_runs = len(self.crossval_runs)
         self.k_folds_for_cross_validation = len(self.crossval_runs[0].runs)
         self.run_ids = [str(run.parameters) for run in self.crossval_runs]
-        print(f"\nParameters used for finding the best performing epoch:\n{self.performance_eval_params}")
+        self.hyperparameters = list(self.crossval_runs[0].parameters.keys())
+        print(f"\nParameters used for finding the best performing epoch:")
+        pretty_print_dict(self.performance_eval_params)
 
     def get_metric_performance_df(self, include=("std", "params", "combined_params"), remove_columns=()):
         df = pd.DataFrame()
@@ -422,16 +437,25 @@ class IntraEpochMetricsTracker:
             df = pd.concat([df, pd.DataFrame(row, index=[0])], ignore_index=True)
         return df
 
-    @staticmethod
-    def style_metric_performance_df(df, sort_by="auc_roc", metrics_to_min=metrics_to_minimize,
-                                    metrics_to_max=metrics_to_maximize):
+    def style_metric_performance_df(self, df, sort_by="auc_roc", metrics_to_min=metrics_to_minimize,
+                                    metrics_to_max=metrics_to_maximize, highlight_hyperparameters=True,
+                                    filter_thresholds={}):
+
+        df = pd.DataFrame(df)
+        # remove all rows where the performance is so bad for a certain metric that it drops below a given threshold
+        for metric, threshold in filter_thresholds.items():
+            if metric in metrics_to_minimize:
+                df = df[df[metric] < threshold]
+            else:
+                df = df[df[metric] > threshold]
 
         low_is_good_cols = [col for col in metrics_to_minimize if col in df.columns]
         # metrics_to_maximize = [metric for metric in self.metrics_used if metric not in metrics_to_minimize]
         high_is_good_cols = [col for col in metrics_to_maximize if col in df.columns]
 
-        style = df.sort_values(sort_by, ascending=False).style.background_gradient(cmap="RdYlGn",
-                                                                                   subset=high_is_good_cols)
+        ascending = sort_by in metrics_to_minimize
+        style = df.sort_values(sort_by, ascending=ascending).style.background_gradient(cmap="RdYlGn",
+                                                                                       subset=high_is_good_cols)
         style = style.background_gradient(cmap="RdYlGn_r", subset=low_is_good_cols)
         style.set_table_styles([
             {
@@ -444,6 +468,17 @@ class IntraEpochMetricsTracker:
                 "selector": "th",
                 "props": [("border", "3px solid grey")]}
         ])
+
+        if highlight_hyperparameters:
+            for col in df:
+                if len(df[col].unique()) > 1 and col not in self.metrics_used and "σ" not in col:
+                    try:  # check if the values in the column are numeric
+                        _ = df[col].astype("float")
+                        style = style.background_gradient(cmap="Blues", subset=[col])
+                    except ValueError:  # otherwise it is assumed to be a binary column which is styled differently
+                        style.apply(highlight_cells, subset=[col])
+                        style.apply(set_font_color, subset=[col])
+
         return style
 
     def setup_run_with_new_params(self, parameter_set):
@@ -537,22 +572,34 @@ class IntraEpochMetricsTracker:
         return tpr[closest_index]
 
     def show_all_runs(self, mode="eval", metric="auc_roc", n_samples_for_smoothing=None, show_separate_folds=False,
-                      show_std_area_plot=True):
+                      show_std_area_plot=True, show_n_best_runs="all"):
+
+        if show_n_best_runs == "all":
+            show_n_best_runs = self.n_hyperparameter_runs
 
         if n_samples_for_smoothing is None:
             n_samples_for_smoothing = self.performance_eval_params["smoothing"]
 
         fig = go.Figure()
-        for run in self.crossval_runs:
-            run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing,
-                              show_separate_folds=show_separate_folds, fig=fig, show_std_area_plot=show_std_area_plot)
-        fig.update_layout(autosize=False, width=1500, height=500, showlegend=True,
+        for idx, run in enumerate(self.crossval_runs):
+            if idx in self.get_indices_of_best_n_runs(n=show_n_best_runs,
+                                                      sort_by=self.performance_eval_params["metric_used"]):
+                run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing,
+                                  show_separate_folds=show_separate_folds, fig=fig,
+                                  show_std_area_plot=show_std_area_plot)
+        fig.update_layout(autosize=False, width=1300, height=600, showlegend=True,
                           margin=dict(l=20, r=20, t=50, b=20),
-                          title_text=f"<b>{mode} - {metric}</b>", title_x=0.3, title_y=0.97, titlefont=dict(size=24))
+                          title_text=f"<b>{mode} - {metric}</b>", title_x=0.3, title_y=0.97, titlefont=dict(size=24),
+                          legend={"orientation": 'h'}
+                          )
         # fig.show()
         return fig
 
-    def boxplot_run_statistics(self, metric):
+    def boxplot_run_statistics(self, metric, show_n_best_runs="all", color_by_hyperparameter=None,
+                               sort_by_current_metric=True):
+        if show_n_best_runs == "all":
+            show_n_best_runs = self.n_hyperparameter_runs
+
         df = pd.DataFrame()
         for run in self.crossval_runs:
             row = dict(run.best_performances["eval"])
@@ -561,19 +608,34 @@ class IntraEpochMetricsTracker:
 
         black = (0, 0, 0, 1)
         fig = go.Figure()
+        if sort_by_current_metric:
+            sort_by_metric = metric
+        else:
+            sort_by_metric = self.performance_eval_params["metric_used"]
+        best_indices = self.get_indices_of_best_n_runs(n=show_n_best_runs, sort_by=sort_by_metric)
 
-        for run in self.crossval_runs:
+        for idx in best_indices:
+            run = self.crossval_runs[idx]
+            if color_by_hyperparameter is not None:
+                hyperparams = list(self.full_metric_performance_df[color_by_hyperparameter].unique())
+                color = color_cycle[hyperparams.index(run.parameters[color_by_hyperparameter])]
+                name = f": {color_by_hyperparameter}: {run.parameters[color_by_hyperparameter]}"
+            else:
+                color = run.color
+                name = str(run.parameters)
+
             temp = df[df["combined_params"] == str(run.parameters)]
-            fig.add_trace(go.Box(y=temp[metric], boxmean=True, x=[metric] * len(temp), name=str(run.parameters),
+            fig.add_trace(go.Box(y=temp[metric], boxmean=True, x=[metric] * len(temp), name=name,
                                  jitter=0.3, pointpos=-0, boxpoints='all', marker_color=f"rgba{black}",
-                                 line_color=f"rgba{run.color}")
+                                 line_color=f"rgba{color}")
                           )
 
-        fig.update_layout(width=1500, height=400, margin=dict(l=150, r=20, t=10, b=20), boxmode='group')
+        fig.update_layout(width=1300, height=600, margin=dict(l=150, r=20, t=10, b=20), boxmode='group',
+                          legend={"orientation": 'h'})
         return fig
 
-
-    def show_single_run(self, run_id,  mode="eval", metric="auc_roc", n_samples_for_smoothing=None, show_separate_folds=True,
+    def show_single_run(self, run_id, mode="eval", metric="auc_roc", n_samples_for_smoothing=None,
+                        show_separate_folds=True,
                         show_std_area_plot=True):
 
         if n_samples_for_smoothing is None:
@@ -586,8 +648,55 @@ class IntraEpochMetricsTracker:
 
         run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing,
                           show_separate_folds=show_separate_folds, fig=fig, show_std_area_plot=show_std_area_plot)
-        fig.update_layout(autosize=False, width=1500, height=500, showlegend=True,
+        fig.update_layout(autosize=False, width=1300, height=600, showlegend=True,
                           margin=dict(l=20, r=20, t=50, b=20),
-                          title_text=f"<b>{mode} - {metric}</b>", title_x=0.3, title_y=0.97, titlefont=dict(size=24))
+                          title_text=f"<b>{mode} - {metric}</b>", title_x=0.3, title_y=0.97, titlefont=dict(size=24),
+                          legend={"orientation": 'h'})
         # fig.show()
         return fig
+
+    def summarize(self, detail="compact"):
+        # print(f"Datasets used:\n{self.datasets}")
+        print(f"Datasets used:")
+        key = list(self.datasets.keys())[0]
+        print(key)
+        pretty_print_dict(self.datasets[key])
+
+        try:
+            if detail == "compact":
+                pretty_print_dict(self.model_and_training_parameters[detail])
+            else:
+                for key, val in self.model_and_training_parameters["full"].items():
+                    print(f"______________________________________________________________\n{key}:\n{val}")
+                    # print(val)
+        except:  # eliminate after a while
+            print(f"\nModel used:")
+            print(self.model_name)
+
+        print(f"\nTracker contains:\n>>  {self.n_hyperparameter_runs} <<  parameter runs\n"
+              f">>  {self.k_folds_for_cross_validation} <<  folds per run\n"
+              f">> {self.n_epochs} <<  epochs")
+
+    def get_indices_of_best_n_runs(self, n, sort_by):
+        if self.n_hyperparameter_runs < n:
+            n = self.n_hyperparameter_runs
+        sort_ascending = sort_by in metrics_to_minimize
+
+        sorted_df = self.full_metric_performance_df.sort_values(sort_by, ascending=sort_ascending)
+        indices = list(sorted_df[:n].index)
+        return indices
+
+    def save_model_and_training_parameters(self, model_info, optimizer, loss_function):
+        self.model_and_training_parameters = {
+            "full": {
+                "model": str(model_info),
+                "optimizer": str(optimizer),
+                "loss_function": str(loss_function)
+            },
+            "compact": {
+                "model": str(model_info).split("(")[0],
+                "optimizer": str(optimizer).split("(")[0],
+                "loss_function": str(loss_function).split("(")[0]
+            }
+
+        }
