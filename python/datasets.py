@@ -34,6 +34,7 @@ class CustomDataset(Dataset):
 
         with open(f"data/Coswara_processed/pickles/{original_files}", "rb") as f:
             self.participants = pickle.load(f)
+            # self.feature_set = pickle.load(f)
 
         if augmented_files is not None:
             for pickle_file in augmented_files:

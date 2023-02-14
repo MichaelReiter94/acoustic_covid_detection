@@ -102,8 +102,8 @@ def get_resnet18():
     TIMESTEPS = 224
     FREQUNCY_BINS = 224
     N_CHANNELS = 3
-    # my_model = resnet18(pretrained=True)
     my_model = resnet18(weights=ResNet18_Weights.DEFAULT)
+    # my_model = resnet18()
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
     # for param in my_model.parameters():
     #     param.requires_grad = False

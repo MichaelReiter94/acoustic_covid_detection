@@ -61,6 +61,13 @@ from datetime import datetime
 #         pickle.dump(participants, f)
 
 
+def pretty_print_dict(dictionary):
+    for k, v in dictionary.items():
+        offset = 20 - len(k)
+        offset = " " * offset
+        print(f"{k}:{offset}{v}")
+
+
 class FeatureSet:
     def __init__(self, type_of_recording, audio_params):
         self.types_of_recording = type_of_recording  # cough-heavy | breathing-deep | ... or a list of them!
@@ -86,9 +93,9 @@ class FeatureSet:
         # no oversampling when there are no augmentations specified
         if augmentations is None:
             augmentations_per_label = (1, 1)
-            self.is_augmented = True
-        else:
             self.is_augmented = False
+        else:
+            self.is_augmented = True
 
         self.augmentations_per_label = augmentations_per_label
 
@@ -134,6 +141,10 @@ class FeatureSet:
 
         with open(f"data/Coswara_processed/pickles/{date}_{save_to}{append}.pickle", "wb") as f:
             pickle.dump(self, f)
+
+    def __repr__(self):
+        print(f"")
+        pretty_print_dict(self.audio_parameters)
 
 
 time_domain_augmentations = Compose([

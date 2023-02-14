@@ -1,3 +1,5 @@
+import pandas as pd
+
 from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50
 from evaluation_and_tracking import IntraEpochMetricsTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift
@@ -69,6 +71,38 @@ TESTING_MODE = not torch.cuda.is_available()
 # <editor-fold desc="function definitions">
 
 
+def get_parameter_groups(model, output_lr, input_lr, verbose=True):
+    # applies different learning rates for each (parent) layer in the model (for finetuning a pretrained network). The
+    # inout layer gets the input_lr, the output layer the output_lr. All layers in between get linearly interpolated.
+
+    # works for resnet architecture and assigns a learning rate for each parent layer and the input and output layers
+    # in total there are (for a resnet 18) 61 parameter groups but only 4 parent layers and 3 layers as input/output
+    # layers. this means there are only  4+3  different learning rates.
+
+    parent_layer = lambda name: name.split(".")[0]
+    layer_names = [name for name, _ in model.named_parameters()]
+    layer_names.reverse()
+    parent_layers = list(set([parent_layer(layer) for layer in layer_names]))
+    n_parent_layers = len(parent_layers)
+    lr = output_lr
+    last_parent_layer = parent_layer(layer_names[0])
+    if verbose:
+        print(f'0: lr = {lr:.6f}, {last_parent_layer}')
+
+    lr_mult = np.power(input_lr / output_lr, 1 / (n_parent_layers - 1))
+    parameter_groups = []
+    for idx, layer in enumerate(layer_names):
+        current_parent_layer = parent_layer(layer)
+        if last_parent_layer != current_parent_layer:
+            lr *= lr_mult
+            if verbose:
+                print(f'{idx}: lr = {lr:.6f}, {current_parent_layer}')
+            last_parent_layer = current_parent_layer
+        parameter_groups.append({'params': [p for n, p in model.named_parameters() if n == layer and p.requires_grad],
+                                 'lr': lr})
+    return parameter_groups
+
+
 def get_parameter_combinations(param_dict):
     Run = namedtuple("Run", param_dict.keys())
     runs = []
@@ -126,15 +160,48 @@ def randomly_split_list_into_two(input_list, ratio=0.8, random_seed=None):
     return input_list_temp[:split_index], input_list_temp[split_index:]
 
 
+def load_train_val_and_test_set_ids_from_disc(rand_seed, split_ratio):
+    # test set is fixed on disc! with (now) 15% of the whole valid samples (excluded bad covid labels and invalid audio
+    # although low quality audio is still included)
+    # The remaining training and evaluation set (85% - ~2000 samples) are randomly split in each fold during cross val.
+    test_set = pd.read_csv("data/Coswara_processed/test_set_df.csv")
+    train_and_validation_set = pd.read_csv("data/Coswara_processed/train_and_validation_set_df.csv")
+    test_set_ids = list(test_set["user_id"])
+
+    train_val_pos_ids = train_and_validation_set[train_and_validation_set["covid_label"] == 1.0]
+    train_val_neg_ids = train_and_validation_set[train_and_validation_set["covid_label"] == 0.0]
+    train_val_pos_ids, train_val_neg_ids = list(train_val_pos_ids["user_id"]), list(train_val_neg_ids["user_id"])
+
+    pos_ids_train, pos_ids_val = randomly_split_list_into_two(train_val_pos_ids, ratio=split_ratio,
+                                                              random_seed=rand_seed)
+    neg_ids_train, neg_ids_val = randomly_split_list_into_two(train_val_neg_ids, ratio=split_ratio,
+                                                              random_seed=rand_seed)
+    train_set_ids = pos_ids_train + neg_ids_train
+    validation_set_ids = pos_ids_val + neg_ids_val
+
+    # does it help or hurt to shuffle the ids around so that not all pos/neg samples are bunched together?
+    # depends on whether shuffle is activated for the data loader?(the weightedrandsampler should always draw randomly?)
+    random.Random(rand_seed).shuffle(train_set_ids)
+    random.Random(rand_seed).shuffle(validation_set_ids)
+    random.Random(rand_seed).shuffle(test_set_ids)
+
+    return train_set_ids, validation_set_ids, test_set_ids
+
+
 def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentation=None, random_seed=None, params=None):
     dataset_dict = dataset_collection[dataset_name]
     DatasetClass = dataset_dict["dataset_class"]
 
-    pos_ids, neg_ids, invalid_ids = get_ids_of(dataset_dict["participants_file"])
-    pos_ids_train, pos_ids_val = randomly_split_list_into_two(pos_ids, ratio=split_ratio, random_seed=random_seed)
-    neg_ids_train, neg_ids_val = randomly_split_list_into_two(neg_ids, ratio=split_ratio, random_seed=random_seed)
-    train_ids = pos_ids_train + neg_ids_train
-    validation_ids = pos_ids_val + neg_ids_val
+    if False:
+        train_ids, validation_ids, test_ids = load_train_val_and_test_set_ids_from_disc(rand_seed=random_seed,
+                                                                                        split_ratio=split_ratio)
+    else:
+        # deprecated - old version
+        pos_ids, neg_ids, invalid_ids = get_ids_of(dataset_dict["participants_file"])
+        pos_ids_train, pos_ids_val = randomly_split_list_into_two(pos_ids, ratio=split_ratio, random_seed=random_seed)
+        neg_ids_train, neg_ids_val = randomly_split_list_into_two(neg_ids, ratio=split_ratio, random_seed=random_seed)
+        train_ids = pos_ids_train + neg_ids_train
+        validation_ids = pos_ids_val + neg_ids_val
 
     if QUICK_TRAIN_FOR_TESTS:
         np.random.shuffle(train_ids)
@@ -252,33 +319,33 @@ random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
 
 QUICK_TRAIN_FOR_TESTS = False
 
-n_epochs = 50
+n_epochs = 40
 n_cross_validation_runs = 5
 
 parameters = dict(
     # rand=random_seeds[:n_cross_validation_runs],
-    batch=[64, 128],
-    lr=[1e-3, 1e-4, 1e-5],
-    wd=[1e-2, 1e-4, 0],  # weight decay regularization
-    lr_decay=[1.0],
+    batch=[32],
+    lr=[1e-5],
+    wd=[1e-4],  # weight decay regularization
+    lr_decay=[0.95],
     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples will be used
-    mixup_p=[0.0],  # pobability of mixup being used at all
-    use_augm_datasets=[True, False],
+    mixup_p=[1],  # pobability of mixup being used at all
+    use_augm_datasets=[True],
     shift=[True],
     sigma=[0.05],
-    weighted_sampler=[True, False],  # wether or not to use a weighted random sampler to adress the class imbalance
-    class_weight=[1, 1.3, 1.6],  # factor for loss of the positive class to adress class imbalance
+    weighted_sampler=[True],  # wether or not to use a weighted random sampler to adress the class imbalance
+    class_weight=[1.3],  # factor for loss of the positive class to adress class imbalance
 )
 
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
 # "brogrammers", "resnet18", "resnet50"
-MODEL_NAME = "brogrammers"
+MODEL_NAME = "resnet50"
 # logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath
 # 15_mfccs, 15_mfccs_highRes
-DATASET_NAME = "15_mfccs"
-RUN_COMMENT = f"class_weight_and_weighted_sampler"
+DATASET_NAME = "logmel_1_channel"
+RUN_COMMENT = f"cough"
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -339,10 +406,12 @@ for p in get_parameter_combinations(parameters):
             delta_t = time.time() - epoch_start
             print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
 
+    if TRACK_METRICS:
+        with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
+            pickle.dump(tracker, f)
+
 if TRACK_METRICS:
     writer.close()
-    with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
-        pickle.dump(tracker, f)
 
 if SAVE_TO_DISC:
     print("saving new model!")
