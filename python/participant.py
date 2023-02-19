@@ -13,6 +13,7 @@ all_types_of_recording = ["cough-heavy", "cough-shallow", "breathing-deep", "bre
 class Participant:
     def __init__(self, participant_id, type_of_recording, audio_params, augmentations=None):
         self.id = participant_id
+        self.is_augmented = augmentations is not None  # TODO check
         data_directory = "data/Coswara_processed/Recordings"
         file_path_participant = os.path.join(data_directory, self.id).replace("\\", "/")
         self.recordings = {}

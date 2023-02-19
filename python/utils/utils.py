@@ -28,3 +28,31 @@ def jupyter_setup():
                           "C:\\Users\\micha\\anaconda3\\envs\\ai38\\Library\\bin;"
     combined_path = min_additional_path + path
     os.environ["PATH"] = combined_path
+
+
+def audiomentations_repr(audiomentation_compose):
+    representation = ""
+    representation = {}
+    for audiomentation in audiomentation_compose.transforms:
+        name = audiomentation.__repr__().split(".")[-1].split(" ")[0]
+        params = {"probability": audiomentation.p}
+        if name == "AddGaussianNoise":
+            params["min_amplitude"] = audiomentation.min_amplitude
+            params["max_amplitude"] = audiomentation.max_amplitude
+        elif name == "PitchShift":
+            params["min_semitones"] = audiomentation.min_semitones
+            params["max_semitones"] = audiomentation.max_semitones
+
+        elif name == "TimeStretch":
+            params["min_rate"] = audiomentation.min_rate
+            params["max_rate"] = audiomentation.max_rate
+
+        elif name == "Gain":
+            params["min_gain_in_db"] = audiomentation.min_gain_in_db
+            params["max_gain_in_db"] = audiomentation.max_gain_in_db
+
+        # representation = f"{representation}\n{name} {params}"
+        param_string = str(params).replace("{", "").replace("}", "")
+        representation[name] = param_string
+        # print(f"{name}{params}")
+    return representation

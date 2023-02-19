@@ -5,6 +5,9 @@ from torch.utils.data import Dataset
 import pickle
 import torch
 from torchvision import transforms
+from audio_processing import FeatureSet
+from utils.utils import audiomentations_repr
+
 
 
 def evenly_distributed_cyclic_shifts(input_matrix, n_output_timesteps, n=10):
@@ -31,15 +34,24 @@ class CustomDataset(Dataset):
 
         self.transform = transform if transform is not None else transforms.ToTensor()
         self.augmentations = augmentations
+        self.predetermined_augmentations = []
+        self.augmentations_per_label = []
 
         with open(f"data/Coswara_processed/pickles/{original_files}", "rb") as f:
-            self.participants = pickle.load(f)
+            feature_set = pickle.load(f)
+            self.audio_proc_params = feature_set.audio_parameters
+            self.types_of_recording = feature_set.types_of_recording
+            self.participants = feature_set.participants
             # self.feature_set = pickle.load(f)
 
         if augmented_files is not None:
             for pickle_file in augmented_files:
                 with open(f"data/Coswara_processed/pickles/{pickle_file}", "rb") as f:
-                    self.participants += pickle.load(f)
+                    feature_set = pickle.load(f)
+                    self.predetermined_augmentations.append(audiomentations_repr(feature_set.augmentations))
+                    self.augmentations_per_label.append(feature_set.augmentations_per_label)
+
+                    self.participants += feature_set.participants
 
         self.participants = [part for part in self.participants if part.id in user_ids]
 
@@ -53,7 +65,6 @@ class CustomDataset(Dataset):
         self.mix_up_alpha = 0.2
         self.mix_up_probability = 1.0
 
-
     def drop_invalid_labels(self):
         self.participants = [participant for participant in self.participants if participant.get_label() is not None]
 
@@ -62,7 +73,10 @@ class CustomDataset(Dataset):
                              participant.meta_data["audio_quality_heavy_cough"] > 0.0]
 
     def get_input_features(self, idx):
-        raise NotImplementedError
+        input_features = self.participants[idx].recordings[self.types_of_recording].features
+        input_features = self.transform(input_features)
+        return input_features
+        # raise NotImplementedError
 
     def __getitem__(self, idx):
         input_features = self.get_input_features(idx)
@@ -154,10 +168,12 @@ class BrogrammersMFCCDataset(CustomDataset):
                                                      augmented_files, verbose)
 
     def get_input_features(self, idx):
-        input_features = self.participants[idx].heavy_cough.MFCCs
+        input_features = self.participants[idx].recordings[self.types_of_recording].features
+        #     input_features = self.participants[idx].heavy_cough.MFCCs
         input_features = self.z_normalize(input_features)
         input_features = self.transform(input_features)
         return input_features
+
 
     @staticmethod
     def get_feature_statistics():
@@ -178,10 +194,13 @@ class ResnetLogmelDataset(CustomDataset):
         super(ResnetLogmelDataset, self).__init__(user_ids, original_files, transform,
                                                   augmentations, augmented_files, verbose, mode)
 
-    def get_input_features(self, idx):
-        input_features = self.participants[idx].heavy_cough.logmel
-        input_features = self.transform(input_features)
-        return input_features
+    # def get_input_features(self, idx):
+    #     input_features = self.participants[idx].heavy_cough.logmel
+    #     input_features = self.transform(input_features)
+    #     return input_features
+
+
+
 
     @staticmethod
     def get_feature_statistics():
@@ -198,9 +217,9 @@ class ResnetLogmel3Channels(CustomDataset):
         super(ResnetLogmel3Channels, self).__init__(user_ids, original_files, transform,
                                                     augmentations, augmented_files, verbose, mode)
 
-    def get_input_features(self, idx):
-        input_features = self.participants[idx].heavy_cough.logmel_3c
-        return torch.Tensor(input_features)
+    # def get_input_features(self, idx):
+    #     input_features = self.participants[idx].heavy_cough.logmel_3c
+    #     return torch.Tensor(input_features)
 
     @staticmethod
     def get_feature_statistics():
@@ -217,10 +236,10 @@ class ResnetLogmel1ChannelBreath(CustomDataset):
         super(ResnetLogmel1ChannelBreath, self).__init__(user_ids, original_files, transform,
                                                          augmentations, augmented_files, verbose, mode)
 
-    def get_input_features(self, idx):
-        input_features = self.participants[idx].deep_breath.logmel
-        input_features = self.transform(input_features)
-        return input_features
+    # def get_input_features(self, idx):
+    #     input_features = self.participants[idx].deep_breath.logmel
+    #     input_features = self.transform(input_features)
+    #     return input_features
 
     @staticmethod
     def get_feature_statistics():
@@ -239,7 +258,9 @@ class BrogrammersMfccHighRes(CustomDataset):
                                                      augmented_files, verbose, mode)
 
     def get_input_features(self, idx):
-        input_features = self.participants[idx].heavy_cough.MFCCs
+        # input_features = self.participants[idx].heavy_cough.MFCCs
+        input_features = self.participants[idx].recordings[self.types_of_recording].features
+
         input_features = self.z_normalize(input_features)
         if self.mode == "train":
             input_features = self.transform(input_features)

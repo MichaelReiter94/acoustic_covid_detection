@@ -1,5 +1,5 @@
 import pandas as pd
-
+from audio_processing import FeatureSet
 from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50
 from evaluation_and_tracking import IntraEpochMetricsTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift
@@ -25,6 +25,12 @@ import tkinter as tk
 from tkinter.messagebox import askyesno
 
 dataset_collection = {
+    "15_mfccs_highres_new": {
+        "dataset_class": BrogrammersMFCCDataset,
+        "participants_file": "2023_02_11_cough_15mfcc_highres.pickle",
+        "augmented_files": ["2023_02_11_cough_15mfcc_highres_augmented.pickle"],
+        # "augmented_files": None
+    },
     "15_mfccs": {
         "dataset_class": BrogrammersMFCCDataset,
         "participants_file": "participants_validLabelsOnly.pickle",
@@ -141,7 +147,7 @@ def get_ids_of(participants_filename):
     # get list of positive, negative and invalid ids from a list of participant instances
     path = os.path.join("data", "Coswara_processed", "pickles", participants_filename)
     with open(path, "rb") as f:
-        parts = pickle.load(f)
+        parts = pickle.load(f).participants
     ids_pos, ids_neg, ids_invalid = [], [], []
     for part in parts:
         if part.get_label() == 1:
@@ -319,8 +325,8 @@ random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
 
 QUICK_TRAIN_FOR_TESTS = False
 
-n_epochs = 40
-n_cross_validation_runs = 5
+n_epochs = 5
+n_cross_validation_runs = 1
 
 parameters = dict(
     # rand=random_seeds[:n_cross_validation_runs],
@@ -329,23 +335,23 @@ parameters = dict(
     wd=[1e-4],  # weight decay regularization
     lr_decay=[0.95],
     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples will be used
-    mixup_p=[1],  # pobability of mixup being used at all
+    mixup_p=[1],  # probability of mix up being used at all
     use_augm_datasets=[True],
     shift=[True],
     sigma=[0.05],
-    weighted_sampler=[True],  # wether or not to use a weighted random sampler to adress the class imbalance
-    class_weight=[1.3],  # factor for loss of the positive class to adress class imbalance
+    weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
+    class_weight=[1.3],  # factor for loss of the positive class to address class imbalance
 )
 
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
 # "brogrammers", "resnet18", "resnet50"
-MODEL_NAME = "resnet50"
+MODEL_NAME = "brogrammers"
 # logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath
-# 15_mfccs, 15_mfccs_highRes
-DATASET_NAME = "logmel_1_channel"
-RUN_COMMENT = f"cough"
+# 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new
+DATASET_NAME = "15_mfccs_highres_new"
+RUN_COMMENT = f"new_feature_set_class"
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -364,7 +370,7 @@ else:
     TRACK_METRICS = True
 
 # ############################################ setup ###################################################################
-tracker = IntraEpochMetricsTracker({DATASET_NAME: dataset_collection[DATASET_NAME]}, verbose=TESTING_MODE)
+tracker = IntraEpochMetricsTracker(datasets={DATASET_NAME: dataset_collection[DATASET_NAME]}, verbose=TESTING_MODE)
 for p in get_parameter_combinations(parameters):
     tracker.setup_run_with_new_params(p)
     for random_seed in random_seeds[:n_cross_validation_runs]:
@@ -384,6 +390,10 @@ for p in get_parameter_combinations(parameters):
         loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight])).to(device)
         # loss_func = nn.BCEWithLogitsLoss().to(device)
         tracker.save_model_and_training_parameters(my_cnn, optimizer, loss_func)
+        tracker.audio_processing_params = train_set.audio_proc_params
+        tracker.augmentations = train_set.predetermined_augmentations
+        tracker.augmentations_per_label = train_set.augmentations_per_label
+        # , train_set.audio_proc_params, train_set.predetermined_augmentations
         # ################################################ training ####################################################
         epoch_start = time.time()
         for epoch in range(n_epochs):

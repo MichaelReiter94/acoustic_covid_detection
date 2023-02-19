@@ -18,6 +18,8 @@ import pickle
 from tqdm import tqdm
 import pandas as pd
 from datetime import datetime
+from utils.utils import audiomentations_repr
+
 # </editor-fold>
 # def create_participant_objects(save_to: str,
 #                                augmentations=None,
@@ -62,10 +64,13 @@ from datetime import datetime
 
 
 def pretty_print_dict(dictionary):
+    return_string = ""
     for k, v in dictionary.items():
         offset = 20 - len(k)
         offset = " " * offset
-        print(f"{k}:{offset}{v}")
+        line = f"{k}:{offset}{v}"
+        return_string = f"{return_string}\n{line}"
+    return return_string
 
 
 class FeatureSet:
@@ -82,6 +87,17 @@ class FeatureSet:
         self.is_augmented = None
         # # def summarize():
 
+    # def __str__(self):
+    #     return f"FeatureSet instance. Type of recording: {self.types_of_recording}. " \
+    #            f"#Recordings: {len(self.participants)}"
+
+    def __len__(self):
+        return len(self.participants)
+
+    # def __repr__(self):
+    #     return f"FeatureSet instance. Type of recording: {self.types_of_recording}. " \
+    #            f"#Recordings: {len(self.participants)}"
+
     def create_participant_objects(self, augmentations=None,
                                    augmentations_per_label=(1, 1),
                                    UPDATE_INVALID_RECORDINGS=False):
@@ -96,7 +112,6 @@ class FeatureSet:
             self.is_augmented = False
         else:
             self.is_augmented = True
-
         self.augmentations_per_label = augmentations_per_label
 
         error_ids_zero_length, error_ids_all_zeros, error_ids_unknown, errors = [], [], [], {}
@@ -142,9 +157,19 @@ class FeatureSet:
         with open(f"data/Coswara_processed/pickles/{date}_{save_to}{append}.pickle", "wb") as f:
             pickle.dump(self, f)
 
+    def __str__(self):
+        representation = f"\nFeature Set - #Participants: {self.__len__()}"
+        representation += "\n----------------------------------------------------"
+        representation += pretty_print_dict(self.audio_parameters)
+        representation += "\n-------------------Augmentations--------------------"
+
+        representation += pretty_print_dict(audiomentations_repr(self.augmentations))
+        representation += "\n----------------------------------------------------"
+
+        return representation
+
     def __repr__(self):
-        print(f"")
-        pretty_print_dict(self.audio_parameters)
+        return f"Feature Set - #Participants: {self.__len__()}"
 
 
 time_domain_augmentations = Compose([

@@ -378,6 +378,18 @@ class IntraEpochMetricsTracker:
         self.compact_metric_performance_df = None
         self.run_ids = None
         self.hyperparameters = None
+        self.audio_processing_params = None
+        self.augmentations = None
+        self.augmentations_per_label = None
+
+    def get_feature_set_parameters_df(self, show_augmentations=True):
+        for i in range(len(self.augmentations)):
+            preprocessing_df = dict(self.audio_processing_params)
+            if show_augmentations:
+                preprocessing_df.update(self.augmentations[i])
+                preprocessing_df.update({"augmentations_per_label": str(self.augmentations_per_label[i])})
+            preprocessing_df = pd.DataFrame(preprocessing_df, index=[0])
+            return preprocessing_df
 
     def compute_overall_metrics(self, metric_used_for_performance_analysis="auc_roc",
                                 smooth_n_samples=5, ignore_first_n_epochs=5):
