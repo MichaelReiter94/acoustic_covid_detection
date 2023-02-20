@@ -32,6 +32,8 @@ def jupyter_setup():
 
 def audiomentations_repr(audiomentation_compose):
     representation = ""
+    if audiomentation_compose is None:
+        return {}
     representation = {}
     for audiomentation in audiomentation_compose.transforms:
         name = audiomentation.__repr__().split(".")[-1].split(" ")[0]

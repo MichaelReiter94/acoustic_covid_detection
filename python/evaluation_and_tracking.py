@@ -260,17 +260,20 @@ class CrossValRuns:
                 self.best_performance_std[mode][metric] = np.nanstd(self.best_performances[mode][metric])
 
     def plot_mean_run(self, mode, metric, n_samples_for_smoothing=1, show_separate_folds=False,
-                      show_std_area_plot=True, fig=None):
+                      show_std_area_plot=True, fig=None, color=None, name=None):
         # note, that neither mean nor std of the cross validation is calculated from smoothed curves of the folds, but
         # it is rather smoothed AFTER calculations. This results usually (always?) in a higher std
-
+        if color is None:
+            color  = self.color
+        if name is None:
+            name = str(self.parameters)
         mean_curve = self.mean_run.get_metric(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing)
         std = self.std_cross_val.get_metric(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing)
         if fig is None:
             fig = go.Figure()
 
         if show_std_area_plot:
-            self.area_plot(mean_curve + std, mean_curve - std, figure=fig)
+            self.area_plot(mean_curve + std, mean_curve - std, figure=fig, color=color)
 
         if show_separate_folds:
             for run in self.runs:
@@ -283,31 +286,33 @@ class CrossValRuns:
 
                 fig.add_trace(go.Scatter(x=np.array(epoch), y=np.array(fold[epoch]), showlegend=False,
                                          name="fold extremum", legendgroup=str(self.parameters),
-                                         marker=dict(size=15, color=rgba_plotly(self.color))))
+                                         marker=dict(size=15, color=rgba_plotly(color))))
 
                 fig.add_trace(go.Scatter(y=fold, opacity=0.35, showlegend=False,
                                          name="fold", legendgroup=str(self.parameters),
-                                         line=dict(color=rgba_plotly(self.color), width=2, dash='dash')))
+                                         line=dict(color=rgba_plotly(color), width=2, dash='dash')))
 
         fig.add_trace(go.Scatter(y=mean_curve,
-                                 name=str(self.parameters),
+                                 name=name,
                                  legendgroup=str(self.parameters),
                                  # showlegend=False,
-                                 line=dict(color=rgba_plotly(self.color))))
+                                 line=dict(color=rgba_plotly(color))))
         return fig
 
-    def area_plot(self, upper_bound, lower_bound, figure=None, x_axis=None):
+    def area_plot(self, upper_bound, lower_bound, figure=None, x_axis=None, color=None):
         if figure is None:
             figure = go.Figure()
         if x_axis is None:
             x_axis = np.arange(len(upper_bound))
+        if color is None:
+            color = self.color
 
         x_path = np.concatenate([x_axis, np.flip(x_axis)], axis=0)
         y_path = np.concatenate([upper_bound, np.flip(lower_bound)], axis=0)
         figure.add_trace(go.Scatter(x=x_path, y=y_path,
                                     name="area of std", legendgroup=str(self.parameters),
                                     fill='toself', showlegend=False, hoverinfo='none',
-                                    fillcolor=rgba_plotly(self.color, opacity=0.2),
+                                    fillcolor=rgba_plotly(color, opacity=0.2),
                                     # opacity=0.2,
                                     line=dict(color="rgba(255,255,255,0)")))
         # line_color='rgba(255,255,255,0)'))
@@ -381,11 +386,20 @@ class IntraEpochMetricsTracker:
         self.audio_processing_params = None
         self.augmentations = None
         self.augmentations_per_label = None
+        self.train_set_label_counts = None
+        self.types_of_recording = None
 
-    def get_feature_set_parameters_df(self, show_augmentations=True):
+
+    def get_data_and_model_params(self, dataset_and_model=True, audio_processing=True, augmentations=True):
         for i in range(len(self.augmentations)):
-            preprocessing_df = dict(self.audio_processing_params)
-            if show_augmentations:
+            preprocessing_df = {}
+            if dataset_and_model:
+                key = list(self.datasets.keys())[0]
+                preprocessing_df.update({"model_name": key})
+                preprocessing_df.update(dict(self.datasets[key]))
+            if audio_processing:
+                preprocessing_df.update(self.audio_processing_params)
+            if augmentations:
                 preprocessing_df.update(self.augmentations[i])
                 preprocessing_df.update({"augmentations_per_label": str(self.augmentations_per_label[i])})
             preprocessing_df = pd.DataFrame(preprocessing_df, index=[0])
@@ -584,7 +598,7 @@ class IntraEpochMetricsTracker:
         return tpr[closest_index]
 
     def show_all_runs(self, mode="eval", metric="auc_roc", n_samples_for_smoothing=None, show_separate_folds=False,
-                      show_std_area_plot=True, show_n_best_runs="all"):
+                      show_std_area_plot=True, show_n_best_runs="all", color_by_hyperparameter=None):
 
         if show_n_best_runs == "all":
             show_n_best_runs = self.n_hyperparameter_runs
@@ -596,9 +610,18 @@ class IntraEpochMetricsTracker:
         for idx, run in enumerate(self.crossval_runs):
             if idx in self.get_indices_of_best_n_runs(n=show_n_best_runs,
                                                       sort_by=self.performance_eval_params["metric_used"]):
+                if color_by_hyperparameter is not None:
+                    hyperparams = list(self.full_metric_performance_df[color_by_hyperparameter].unique())
+                    color = color_cycle[hyperparams.index(run.parameters[color_by_hyperparameter])]
+                    name = f": {color_by_hyperparameter}: {run.parameters[color_by_hyperparameter]}"
+                else:
+                    color = run.color
+                    name = str(run.parameters)
+
                 run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing,
                                   show_separate_folds=show_separate_folds, fig=fig,
-                                  show_std_area_plot=show_std_area_plot)
+                                  show_std_area_plot=show_std_area_plot, color=color, name=name)
+
         fig.update_layout(autosize=False, width=1300, height=600, showlegend=True,
                           margin=dict(l=20, r=20, t=50, b=20),
                           title_text=f"<b>{mode} - {metric}</b>", title_x=0.3, title_y=0.97, titlefont=dict(size=24),
@@ -669,10 +692,17 @@ class IntraEpochMetricsTracker:
 
     def summarize(self, detail="compact"):
         # print(f"Datasets used:\n{self.datasets}")
-        print(f"Datasets used:")
+        print(f"\nDatasets used:")
         key = list(self.datasets.keys())[0]
         print(key)
+        self.datasets[key]["train_set_label_counts"] = self.train_set_label_counts
+        self.datasets[key]["types_of_recording"] = self.types_of_recording
         pretty_print_dict(self.datasets[key])
+        print("\nAudio Processing Parameters:")
+        pretty_print_dict(self.audio_processing_params)
+        print("\nPredetermined Time Domain Augmentations:")
+        for augmentation in self.augmentations:
+            pretty_print_dict(augmentation)
 
         try:
             if detail == "compact":
@@ -685,11 +715,19 @@ class IntraEpochMetricsTracker:
             print(f"\nModel used:")
             print(self.model_name)
 
-        print(f"\nTracker contains:\n>>  {self.n_hyperparameter_runs} <<  parameter runs\n"
-              f">>  {self.k_folds_for_cross_validation} <<  folds per run\n"
-              f">> {self.n_epochs} <<  epochs")
+        print(f"\nTracker contains:")
+        pretty_print_dict({
+            "parameter runs": self.n_hyperparameter_runs,
+            "folds per run": self.k_folds_for_cross_validation,
+            "epochs": self.n_epochs
+        })
 
-    def get_indices_of_best_n_runs(self, n, sort_by):
+
+
+    def get_indices_of_best_n_runs(self, n, sort_by=None):
+        if sort_by is None:
+            sort_by = self.performance_eval_params["metric_used"]
+
         if self.n_hyperparameter_runs < n:
             n = self.n_hyperparameter_runs
         sort_ascending = sort_by in metrics_to_minimize
@@ -703,7 +741,7 @@ class IntraEpochMetricsTracker:
             "full": {
                 "model": str(model_info),
                 "optimizer": str(optimizer),
-                "loss_function": str(loss_function)
+                "loss_function": str(loss_function),
             },
             "compact": {
                 "model": str(model_info).split("(")[0],

@@ -20,7 +20,7 @@ def jupyter_setup():
     os.environ["PATH"] = combined_path
 
 
-def load_tracker():
+def load_tracker(verbosity=None):
     root = tk.Tk()
     path = filedialog.askopenfilename(initialdir="run/tracker_saves", title="Select a File",
                                       filetypes=[("Pickled Tracker Files", "*.pickle*")])
@@ -29,9 +29,10 @@ def load_tracker():
     with open(path, "rb") as f:
         tracker = pickle.load(f)
 
-    tracker.compute_overall_metrics(smooth_n_samples=10, ignore_first_n_epochs=5,
+    tracker.compute_overall_metrics(smooth_n_samples=10, ignore_first_n_epochs=10,
                                     metric_used_for_performance_analysis="auc_roc")
-    tracker.summarize()
+    if verbosity is not None:
+        tracker.summarize(verbosity)
 
     # print(f"\nTracker contains:\n>>  {tracker.n_hyperparameter_runs} <<  parameter runs\n"
     #       f">>  {tracker.k_folds_for_cross_validation} <<  folds per run\n"

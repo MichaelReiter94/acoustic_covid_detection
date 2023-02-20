@@ -63,6 +63,21 @@ from utils.utils import audiomentations_repr
 #         pickle.dump(participants, f)
 
 
+def contains_only_good_audio(participant_metadata, types_of_recording):
+    only_good_audio = True
+
+    if isinstance(types_of_recording, str):
+        types_of_recording = [types_of_recording]
+
+    for rec_type in types_of_recording:
+        recording_quality = participant_metadata[f"audio_quality_{rec_type}"].item()
+        if recording_quality > 0:
+            pass
+        else:
+            only_good_audio = False
+    return only_good_audio
+
+
 def pretty_print_dict(dictionary):
     return_string = ""
     for k, v in dictionary.items():
@@ -73,30 +88,20 @@ def pretty_print_dict(dictionary):
     return return_string
 
 
+
 class FeatureSet:
     def __init__(self, type_of_recording, audio_params):
+        audio_params["hop_size_ms"] =  round(audio_params["hop_size"]/audio_params["sample_rate"]*1000, 2)
+        audio_params["window_length_ms"] =  round(audio_params["window_length"]/audio_params["sample_rate"]*1000, 2)
+        audio_params["duration_seconds"] =  round(audio_params["hop_size_ms"]*audio_params["n_time_steps"]/1000, 2)
+        audio_params["fft_res_hz"] =  round(audio_params["sample_rate"]/audio_params["n_fft"], 2)
+
         self.types_of_recording = type_of_recording  # cough-heavy | breathing-deep | ... or a list of them!
         self.audio_parameters = audio_params
         self.augmentations = None
         self.augmentations_per_label = None  # labels(0,1) meaning (neg, pos)
         self.participants = []
-        # # nfft, window_length, hop size in SECONDS/MILLISECONDS
-        # # fft_frequency resolution
-        # # total duration of one sample
-
         self.is_augmented = None
-        # # def summarize():
-
-    # def __str__(self):
-    #     return f"FeatureSet instance. Type of recording: {self.types_of_recording}. " \
-    #            f"#Recordings: {len(self.participants)}"
-
-    def __len__(self):
-        return len(self.participants)
-
-    # def __repr__(self):
-    #     return f"FeatureSet instance. Type of recording: {self.types_of_recording}. " \
-    #            f"#Recordings: {len(self.participants)}"
 
     def create_participant_objects(self, augmentations=None,
                                    augmentations_per_label=(1, 1),
@@ -118,8 +123,8 @@ class FeatureSet:
         for ID in tqdm(participant_ids):
             participant_metadata = metadata[metadata["user_id"] == ID]
 
-            # if participant_metadata["audio_quality_deep_breathing"].item() > 0:
-            if participant_metadata["audio_quality_heavy_cough"].item() > 0:  # TODO add other types of recording
+            audio_quailty_is_good_enough = contains_only_good_audio(participant_metadata, self.types_of_recording)
+            if audio_quailty_is_good_enough:
                 try:
                     label = int(participant_metadata.covid_label)
                     for _ in range(self.augmentations_per_label[label]):
@@ -171,6 +176,10 @@ class FeatureSet:
     def __repr__(self):
         return f"Feature Set - #Participants: {self.__len__()}"
 
+    def __len__(self):
+        return len(self.participants)
+
+
 
 time_domain_augmentations = Compose([
     AddGaussianNoise(min_amplitude=0.0003, max_amplitude=0.02, p=0.8),
@@ -181,9 +190,9 @@ time_domain_augmentations = Compose([
 all_types_of_recording = ["cough-heavy", "cough-shallow", "breathing-deep", "breathing-shallow", "counting-fast",
                           "counting-normal", "vowel-a", "vowel-e", "vowel-o"]
 audio_parameters = dict(
-    type_of_features="mfcc",  # logmel | mfcc
-    n_time_steps=259,  # 259 | 224
-    n_features=15,  # 15 | 224
+    type_of_features="logmel",  # logmel | mfcc
+    n_time_steps=224,  # 259 | 224
+    n_features=224,  # 15 | 224
     sample_rate=22050,
     n_fft=512 * 16,
     window_length=512,
@@ -196,4 +205,4 @@ if __name__ == "__main__":
     feature_set = FeatureSet("cough-heavy", audio_parameters)
     feature_set.create_participant_objects(augmentations=time_domain_augmentations,
                                            augmentations_per_label=(1, 4))
-    feature_set.save_to("cough_15mfcc_highres")
+    feature_set.save_to("logmel_cough_22kHz_new")

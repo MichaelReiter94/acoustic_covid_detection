@@ -31,6 +31,12 @@ dataset_collection = {
         "augmented_files": ["2023_02_11_cough_15mfcc_highres_augmented.pickle"],
         # "augmented_files": None
     },
+    "brogrammers_new": {
+        "dataset_class": BrogrammersMFCCDataset,
+        "participants_file": "2023_02_20_brogrammers_settings_new.pickle",
+        "augmented_files": ["2023_02_20_brogrammers_settings_new_augmented.pickle"],
+        # "augmented_files": None
+    },
     "15_mfccs": {
         "dataset_class": BrogrammersMFCCDataset,
         "participants_file": "participants_validLabelsOnly.pickle",
@@ -198,7 +204,7 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
     dataset_dict = dataset_collection[dataset_name]
     DatasetClass = dataset_dict["dataset_class"]
 
-    if False:
+    if USE_TRAIN_VAL_TEST_SPLIT:
         train_ids, validation_ids, test_ids = load_train_val_and_test_set_ids_from_disc(rand_seed=random_seed,
                                                                                         split_ratio=split_ratio)
     else:
@@ -322,20 +328,20 @@ random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
                 66445511337, 316497938271, 161094, 191919191, 101010107]
 
 # ###############################################  manual setup  #######################################################
-
+USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of a 80/20 split without test set
 QUICK_TRAIN_FOR_TESTS = False
 
-n_epochs = 5
-n_cross_validation_runs = 1
+n_epochs = 100
+n_cross_validation_runs = 5
 
 parameters = dict(
     # rand=random_seeds[:n_cross_validation_runs],
     batch=[32],
-    lr=[1e-5],
+    lr=[1e-4, 5e-4, 1e-5],
     wd=[1e-4],  # weight decay regularization
-    lr_decay=[0.95],
+    lr_decay=[0.95, 1],
     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples will be used
-    mixup_p=[1],  # probability of mix up being used at all
+    mixup_p=[0.5],  # probability of mix up being used at all
     use_augm_datasets=[True],
     shift=[True],
     sigma=[0.05],
@@ -349,9 +355,9 @@ augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 # "brogrammers", "resnet18", "resnet50"
 MODEL_NAME = "brogrammers"
 # logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath
-# 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new
-DATASET_NAME = "15_mfccs_highres_new"
-RUN_COMMENT = f"new_feature_set_class"
+# 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new
+DATASET_NAME = "brogrammers_new"
+RUN_COMMENT = f"feature_set_class3"
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -390,9 +396,13 @@ for p in get_parameter_combinations(parameters):
         loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight])).to(device)
         # loss_func = nn.BCEWithLogitsLoss().to(device)
         tracker.save_model_and_training_parameters(my_cnn, optimizer, loss_func)
+        tracker.types_of_recording = train_set.types_of_recording
         tracker.audio_processing_params = train_set.audio_proc_params
         tracker.augmentations = train_set.predetermined_augmentations
         tracker.augmentations_per_label = train_set.augmentations_per_label
+        tracker.train_set_label_counts = f"label '0': {train_set.label_counts()[1][0]}  -  " \
+                                         f"label '1': {train_set.label_counts()[1][1]}"
+
         # , train_set.audio_proc_params, train_set.predetermined_augmentations
         # ################################################ training ####################################################
         epoch_start = time.time()

@@ -56,7 +56,7 @@ class CustomDataset(Dataset):
         self.participants = [part for part in self.participants if part.id in user_ids]
 
         self.drop_invalid_labels()
-        self.drop_bad_audio()
+        # self.drop_bad_audio()
         self.labels = np.array([int(participant.get_label()) for participant in self.participants])
         self.mu, self.sigma = self.get_feature_statistics()
         if verbose:
@@ -68,9 +68,9 @@ class CustomDataset(Dataset):
     def drop_invalid_labels(self):
         self.participants = [participant for participant in self.participants if participant.get_label() is not None]
 
-    def drop_bad_audio(self):
-        self.participants = [participant for participant in self.participants if
-                             participant.meta_data["audio_quality_heavy_cough"] > 0.0]
+    # def drop_bad_audio(self):
+        # self.participants = [participant for participant in self.participants if
+        #                      participant.meta_data["audio_quality_heavy_cough"] > 0.0]
 
     def get_input_features(self, idx):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
@@ -112,7 +112,8 @@ class CustomDataset(Dataset):
         return (mfccs - self.mu) / self.sigma
 
     def label_counts(self):
-        return np.unique(self.labels, return_counts=True)
+        label_count = np.unique(self.labels, return_counts=True)
+        return label_count
 
     def get_input_shape(self):
         in_features, _ = self.__getitem__(0)
