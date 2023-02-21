@@ -41,7 +41,19 @@ from audiomentations import Compose, AddGaussianNoise, PitchShift, HighPassFilte
 
 class AudioRecording:
     def __init__(self, data_path, type_of_recording, audio_parameters, augmentations=None):
-        self.file_path = f"{os.path.join(data_path, type_of_recording)}.wav".replace("\\", "/")
+        combined_recordings = {
+            "combined_coughs": ["cough-heavy", "cough-shallow"],
+            "combined_breaths": ["breathing-deep", "breathing-shallow"]
+        }
+
+        if type_of_recording in combined_recordings:
+            self.file_path = []
+            for combined_rec_type in combined_recordings[type_of_recording]:
+                self.file_path.append(f"{os.path.join(data_path, combined_rec_type)}.wav".replace("\\", "/"))
+        else:
+            self.file_path = f"{os.path.join(data_path, type_of_recording)}.wav".replace("\\", "/")
+
+
         self.recording_type = type_of_recording
         self.augmentations = augmentations
         self.hop_size = audio_parameters["hop_size"]
@@ -56,7 +68,7 @@ class AudioRecording:
         self.original_duration = None
         self.original_duration_trimmed_silence = None
 
-        audio, self.original_sr = self.get_audio(trim_silence_below_x_dB=48)
+        audio, self.original_sr = self.get_audio(trim_silence_below_x_dB=36)
 
         if self.augmentations is not None:
             audio = self.augmentations(audio, self.original_sr)
@@ -87,14 +99,22 @@ class AudioRecording:
                                                    sr=self.target_sr, fmin=self.fmin, fmax=self.fmax, htk=True)
         return librosa.power_to_db(mel_spect)
 
-    def get_audio(self, trim_silence_below_x_dB=48):
-        audio, sr = librosa.load(self.file_path, sr=None)
+    def get_audio(self, trim_silence_below_x_dB=40):
+
+        if isinstance(self.file_path, str):
+            audio, sr = librosa.load(self.file_path, sr=None)
+            if trim_silence_below_x_dB is not None:
+                audio, _ = librosa.effects.trim(audio, top_db=trim_silence_below_x_dB)
+        else:
+            audio = np.array([])
+            for path in self.file_path:
+                audio_temp, sr = librosa.load(path, sr=None)
+                if trim_silence_below_x_dB is not None:
+                    audio_temp, _ = librosa.effects.trim(audio_temp, top_db=trim_silence_below_x_dB)
+                audio = np.concatenate([audio, audio_temp])
+
         self.original_duration = round(len(audio) / sr, 2)
-
-        if trim_silence_below_x_dB is not None:
-            audio, _ = librosa.effects.trim(audio, top_db=trim_silence_below_x_dB)
-            self.original_duration_trimmed_silence = round(len(audio) / sr, 2)
-
+        self.original_duration_trimmed_silence = round(len(audio) / sr, 2)
         print(f"Duration of the Recording: {round(len(audio) / sr, 2)}")
         return audio, sr
 

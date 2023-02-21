@@ -115,11 +115,12 @@ def get_parameter_groups(model, output_lr, input_lr, verbose=True):
     return parameter_groups
 
 
-def get_parameter_combinations(param_dict):
+def get_parameter_combinations(param_dict, verbose=True):
     Run = namedtuple("Run", param_dict.keys())
     runs = []
     for run_combination in product(*param_dict.values()):
         runs.append(Run(*run_combination))
+    print(f"#Parameter Combinations: {len(runs)}")
     return runs
 
 
@@ -331,22 +332,22 @@ random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
 USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of a 80/20 split without test set
 QUICK_TRAIN_FOR_TESTS = False
 
-n_epochs = 100
+n_epochs = 50
 n_cross_validation_runs = 5
 
 parameters = dict(
     # rand=random_seeds[:n_cross_validation_runs],
-    batch=[32],
-    lr=[1e-4, 5e-4, 1e-5],
+    batch=[32, 64, 128],
+    lr=[1e-3, 1e-4, 1e-5],
     wd=[1e-4],  # weight decay regularization
-    lr_decay=[0.95, 1],
+    lr_decay=[0.85, 0.925, 1],
     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples will be used
-    mixup_p=[0.5],  # probability of mix up being used at all
+    mixup_p=[0.0, 1],  # probability of mix up being used at all
     use_augm_datasets=[True],
     shift=[True],
     sigma=[0.05],
     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
-    class_weight=[1.3],  # factor for loss of the positive class to address class imbalance
+    class_weight=[1],  # factor for loss of the positive class to address class imbalance
 )
 
 transforms = None
@@ -357,7 +358,7 @@ MODEL_NAME = "brogrammers"
 # logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath
 # 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new
 DATASET_NAME = "brogrammers_new"
-RUN_COMMENT = f"feature_set_class3"
+RUN_COMMENT = f"train_val_test_larger_run"
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -377,7 +378,7 @@ else:
 
 # ############################################ setup ###################################################################
 tracker = IntraEpochMetricsTracker(datasets={DATASET_NAME: dataset_collection[DATASET_NAME]}, verbose=TESTING_MODE)
-for p in get_parameter_combinations(parameters):
+for p in get_parameter_combinations(parameters, verbose=True):
     tracker.setup_run_with_new_params(p)
     for random_seed in random_seeds[:n_cross_validation_runs]:
         tracker.start_run_with_random_seed(random_seed)

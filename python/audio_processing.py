@@ -66,11 +66,26 @@ from utils.utils import audiomentations_repr
 def contains_only_good_audio(participant_metadata, types_of_recording):
     only_good_audio = True
 
+    combined_recordings = {
+        "combined_coughs": ["cough-heavy", "cough-shallow"],
+        "combined_breaths": ["breathing-deep", "breathing-shallow"]
+    }
+
     if isinstance(types_of_recording, str):
-        types_of_recording = [types_of_recording]
+            types_of_recording = [types_of_recording]
 
     for rec_type in types_of_recording:
-        recording_quality = participant_metadata[f"audio_quality_{rec_type}"].item()
+        recording_quality = 0
+
+        if rec_type in combined_recordings:
+            # allow for recordings that have at least 1 of the combined recording types to have above quality 0
+            # if there is any nan in any of the recordings, it will be dismissed
+            combined_recordings = combined_recordings.get(rec_type)
+            for combined_rec_type in combined_recordings:
+
+                recording_quality += participant_metadata[f"audio_quality_{combined_rec_type}"].item()
+        else:
+            recording_quality += participant_metadata[f"audio_quality_{rec_type}"].item()
         if recording_quality > 0:
             pass
         else:
@@ -128,10 +143,12 @@ class FeatureSet:
                 try:
                     label = int(participant_metadata.covid_label)
                     for _ in range(self.augmentations_per_label[label]):
-                        self.participants.append(Participant(ID,
-                                                             type_of_recording=self.types_of_recording,
+                        self.participants.append(Participant(participant_id=ID,
+                                                             types_of_recording=self.types_of_recording,
                                                              audio_params=self.audio_parameters,
                                                              augmentations=augmentations))
+
+
                 except ValueError as e:
                     # length of recording is 0, or no valid covid label
                     error_ids_zero_length.append(ID)
@@ -157,9 +174,10 @@ class FeatureSet:
         date = datetime.today().strftime("%Y_%m_%d")
         append = ""
         if self.augmentations is not None:
-            append = "_augmented"
+            append += "_augmented"
 
-        with open(f"data/Coswara_processed/pickles/{date}_{save_to}{append}.pickle", "wb") as f:
+        with open(f"data/Coswara_processed/pickles/{date}_{self.audio_parameters['type_of_features']}_"
+                  f"{self.types_of_recording}_{save_to}_{append}.pickle", "wb") as f:
             pickle.dump(self, f)
 
     def __str__(self):
@@ -189,20 +207,25 @@ time_domain_augmentations = Compose([
 ])
 all_types_of_recording = ["cough-heavy", "cough-shallow", "breathing-deep", "breathing-shallow", "counting-fast",
                           "counting-normal", "vowel-a", "vowel-e", "vowel-o"]
+combined_recordings = {
+    "combined_coughs": ["cough-heavy", "cough-shallow"],
+    "combined_breaths": ["breathing-deep", "breathing-shallow"]
+}
+
 audio_parameters = dict(
-    type_of_features="logmel",  # logmel | mfcc
-    n_time_steps=224,  # 259 | 224
-    n_features=224,  # 15 | 224
+    type_of_features="mfcc",  # logmel | mfcc
+    n_time_steps=259,  # 259 | 224
+    n_features=15,  # 15 | 224
     sample_rate=22050,
-    n_fft=512 * 16,
+    n_fft=256 * 16,
     window_length=512,
-    hop_size=256,
+    hop_size=512,
     fmin=0,
     fmax=22050 // 2
 )
 
 if __name__ == "__main__":
-    feature_set = FeatureSet("cough-heavy", audio_parameters)
-    feature_set.create_participant_objects(augmentations=time_domain_augmentations,
+    feature_set = FeatureSet("combined_breaths", audio_parameters)
+    feature_set.create_participant_objects(augmentations=None,
                                            augmentations_per_label=(1, 4))
-    feature_set.save_to("logmel_cough_22kHz_new")
+    feature_set.save_to("3s_22kHz")

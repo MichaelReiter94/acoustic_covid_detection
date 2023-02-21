@@ -11,19 +11,29 @@ all_types_of_recording = ["cough-heavy", "cough-shallow", "breathing-deep", "bre
 
 
 class Participant:
-    def __init__(self, participant_id, type_of_recording, audio_params, augmentations=None):
+    def __init__(self, participant_id, types_of_recording, audio_params, augmentations=None):
         self.id = participant_id
-        self.is_augmented = augmentations is not None  # TODO check
+        self.is_augmented = augmentations is not None
         data_directory = "data/Coswara_processed/Recordings"
         file_path_participant = os.path.join(data_directory, self.id).replace("\\", "/")
         self.recordings = {}
-        for recording_name in all_types_of_recording:
-            if recording_name in type_of_recording:
-                self.recordings[recording_name] = AudioRecording(data_path=file_path_participant,
-                                                                 type_of_recording=recording_name,
-                                                                 audio_parameters=audio_params,
-                                                                 augmentations=augmentations)
-        # if type_of_recording == "cough-heavy":
+        # for recording_name in all_types_of_recording:
+        #     if recording_name in types_of_recording:
+        #         self.recordings[recording_name] = AudioRecording(data_path=file_path_participant,
+        #                                                          type_of_recording=recording_name,
+        #                                                          audio_parameters=audio_params,
+        #                                                          augmentations=augmentations)
+
+        if isinstance(types_of_recording, str):
+            types_of_recording = [types_of_recording]
+
+        for recording_name in types_of_recording:
+            self.recordings[recording_name] = AudioRecording(data_path=file_path_participant,
+                                                             type_of_recording=recording_name,
+                                                             audio_parameters=audio_params,
+                                                             augmentations=augmentations)
+
+        # if types_of_recording == "cough-heavy":
         #     self.heavy_cough = AudioRecording(self.file_path_participant, "cough-heavy", audio_params, augmentations)
         #
         # self.shallow_cough = AudioRecording(self.file_path_participant, "cough-shallow", audio_params, augmentations)
