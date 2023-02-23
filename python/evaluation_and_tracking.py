@@ -391,7 +391,7 @@ class IntraEpochMetricsTracker:
 
 
     def get_data_and_model_params(self, dataset_and_model=True, audio_processing=True, augmentations=True):
-        for i in range(len(self.augmentations)):
+        for i in range(max(len(self.augmentations), 1)):
             preprocessing_df = {}
             if dataset_and_model:
                 key = list(self.datasets.keys())[0]
@@ -403,7 +403,8 @@ class IntraEpochMetricsTracker:
                 preprocessing_df.update(self.augmentations[i])
                 preprocessing_df.update({"augmentations_per_label": str(self.augmentations_per_label[i])})
             preprocessing_df = pd.DataFrame(preprocessing_df, index=[0])
-            return preprocessing_df
+            # print(preprocessing_df)
+        return preprocessing_df
 
     def compute_overall_metrics(self, metric_used_for_performance_analysis="auc_roc",
                                 smooth_n_samples=5, ignore_first_n_epochs=5):

@@ -174,10 +174,10 @@ class FeatureSet:
         date = datetime.today().strftime("%Y_%m_%d")
         append = ""
         if self.augmentations is not None:
-            append += "_augmented"
+            append += "augmented"
 
         with open(f"data/Coswara_processed/pickles/{date}_{self.audio_parameters['type_of_features']}_"
-                  f"{self.types_of_recording}_{save_to}_{append}.pickle", "wb") as f:
+                  f"{self.types_of_recording}_{save_to}{append}.pickle", "wb") as f:
             pickle.dump(self, f)
 
     def __str__(self):
@@ -200,10 +200,10 @@ class FeatureSet:
 
 
 time_domain_augmentations = Compose([
-    AddGaussianNoise(min_amplitude=0.0003, max_amplitude=0.02, p=0.8),
-    PitchShift(min_semitones=-3, max_semitones=3, p=0.8),
-    TimeStretch(min_rate=0.85, max_rate=1.15, leave_length_unchanged=False, p=0.8),
-    Gain(min_gain_in_db=-40, max_gain_in_db=16, p=0.8)
+    AddGaussianNoise(min_amplitude=0.0003, max_amplitude=0.01, p=0.8),
+    PitchShift(min_semitones=-2, max_semitones=2, p=0.8),
+    TimeStretch(min_rate=0.95, max_rate=1.05, leave_length_unchanged=False, p=0.8),
+    Gain(min_gain_in_db=-18, max_gain_in_db=12, p=0.8)
 ])
 all_types_of_recording = ["cough-heavy", "cough-shallow", "breathing-deep", "breathing-shallow", "counting-fast",
                           "counting-normal", "vowel-a", "vowel-e", "vowel-o"]
@@ -217,15 +217,15 @@ audio_parameters = dict(
     n_time_steps=259,  # 259 | 224
     n_features=15,  # 15 | 224
     sample_rate=22050,
-    n_fft=256 * 16,
+    n_fft=512 * 16,
     window_length=512,
-    hop_size=512,
+    hop_size=256,
     fmin=0,
     fmax=22050 // 2
 )
 
 if __name__ == "__main__":
-    feature_set = FeatureSet("combined_breaths", audio_parameters)
-    feature_set.create_participant_objects(augmentations=None,
-                                           augmentations_per_label=(1, 4))
-    feature_set.save_to("3s_22kHz")
+    feature_set = FeatureSet("combined_coughs", audio_parameters)
+    feature_set.create_participant_objects(augmentations=time_domain_augmentations,
+                                           augmentations_per_label=(1, 7))
+    feature_set.save_to("3s_highres_7x")

@@ -124,3 +124,66 @@ def get_resnet50():
     my_model.fc = nn.Linear(n_features, 1)
     return my_model
 
+
+class BrogrammersMIL(nn.Module):
+    def __init__(self):
+        super().__init__()
+        TIMESTEPS = 259
+        MFCC_BINS = 15
+        self.input_size = (1, MFCC_BINS, TIMESTEPS)
+
+        n_filters1 = 64
+        n_filters2 = 32
+        torch.manual_seed(9876543210)
+
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=n_filters1, kernel_size=3),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(in_channels=n_filters1, out_channels=n_filters2, kernel_size=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(n_filters2),
+            nn.Flatten(start_dim=1)
+        )
+
+        n_linear_params = ((TIMESTEPS - 2)//2 - 1) * ((MFCC_BINS - 2)//2 - 1) * n_filters2
+
+        self.linear_layers = nn.Sequential(
+            nn.Linear(in_features=n_linear_params, out_features=256),
+            nn.ReLU(),
+            nn.Dropout(p=0.5),
+            nn.Linear(in_features=256, out_features=128),
+            nn.ReLU(),
+            nn.Dropout(p=0.3),
+        )
+
+        self.mil_attention = nn.Sequential(
+            nn.Linear(128, 128),
+            nn.Tanh(),
+            nn.Linear(128, 1),
+        )
+
+        self.output_layer = nn.Sequential(
+            nn.Linear(in_features=128, out_features=1)
+        )
+        print("loading Multiple Instance Learning model based on brogrammers")
+
+    def forward(self, x):
+        x = x.squeeze(0)
+        # first dimenstion will be the batch size which will be set to 1. This is why it can be eliminated.
+        # the elements within a bag (dimension 1) will instead be kind of treated as batch size
+
+        x = self.conv_layers(x)
+        x = self.linear_layers(x)
+
+        attentation_coef = self.mil_attention(x)
+        attentation_coef = torch.transpose(attentation_coef, 1, 0)
+        attentation_coef = F.softmax(attentation_coef, dim=1)
+
+        x_combined_bag = torch.mm(attentation_coef, x)
+        y_pred = self.output_layer(x_combined_bag)
+        # no sigmoid activation because the now used BCELossWithLogits class has the activation function included (
+        # which improves numerical stability/precision) Also this class has the possibility to add a weighting to the
+        # two classes to address class imbalance!! if BCELossWithLogits is not used uncomment the following line:
+        # y_pred = torch.sigmoid(y_pred)
+        return y_pred

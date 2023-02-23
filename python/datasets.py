@@ -75,16 +75,18 @@ class CustomDataset(Dataset):
     def get_input_features(self, idx):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
         input_features = self.transform(input_features)
+        if self.augmentations is not None:
+            input_features = self.augmentations(input_features)
         return input_features
         # raise NotImplementedError
 
     def __getitem__(self, idx):
         input_features = self.get_input_features(idx)
         # input_features = self.transform(input_features)
-        if self.augmentations is not None:
-            input_features = self.augmentations(input_features)
+        # if self.augmentations is not None:
+        #     input_features = self.augmentations(input_features)
 
-        n_timesteps = input_features.shape[2]
+        n_timesteps = input_features.shape[-1]
         if n_timesteps < self.n_timesteps:
             input_features = torch.nn.functional.pad(input_features, (0, self.n_timesteps - n_timesteps))
         elif n_timesteps > self.n_timesteps:
@@ -97,7 +99,7 @@ class CustomDataset(Dataset):
             # probability = 1-np.float_power(epoch, -0.3)
             input_features, output_label = self.mix_up(orig_sample=input_features, orig_label=output_label)
 
-        n_channels = input_features.shape[0]
+        n_channels = input_features.shape[-3]
         if n_channels < self.n_channels:
             input_features = input_features.expand(3, -1, -1)
         return input_features, torch.tensor(output_label).float()
@@ -134,30 +136,29 @@ class CustomDataset(Dataset):
         return mu, sigma
 
     def mix_up(self, orig_sample, orig_label):
-        # TODO include probability to use mixup at all as input
-        mixup_idx = np.random.randint(self.__len__())
+        target_label = random.choice([0, 1])
+        mixup_label = None
+        while mixup_label != target_label:
+            # make sure, that mixup chooses positive and negative samples with 50% each
+            # (not depending on the occurences in the dataset)
+            mixup_idx = np.random.randint(self.__len__())
+            mixup_label = self.participants[mixup_idx].get_label()
+
         mixup_sample = self.get_input_features(mixup_idx)
-        # CyclicShift(mixup_sample) / np.roll() / torch.roll()
-        # mixup_sample = mixup_sample[:, :, self.n_timesteps]
         if self.augmentations is not None:
             mixup_sample = self.augmentations(mixup_sample)
 
-        n_timesteps = mixup_sample.shape[2]
+        n_timesteps = mixup_sample.shape[-1]
         if n_timesteps < self.n_timesteps:
             mixup_sample = torch.nn.functional.pad(mixup_sample, (0, self.n_timesteps - n_timesteps))
         elif n_timesteps > self.n_timesteps:
             mixup_sample = mixup_sample[:, :, :self.n_timesteps]
 
-        # TODO use padding before cyclic shift to avoid bias
 
-        mixup_label = self.participants[mixup_idx].get_label()
-
-        # alpha = 0.2
         lamda = np.random.beta(self.mix_up_alpha, self.mix_up_alpha)
         mixed_up_label = lamda * orig_label + (1 - lamda) * mixup_label
         mixed_up_sample = lamda * orig_sample + (1 - lamda) * mixup_sample
         return mixed_up_sample, mixed_up_label
-
 
 
 class BrogrammersMFCCDataset(CustomDataset):
@@ -173,6 +174,8 @@ class BrogrammersMFCCDataset(CustomDataset):
         #     input_features = self.participants[idx].heavy_cough.MFCCs
         input_features = self.z_normalize(input_features)
         input_features = self.transform(input_features)
+        if self.augmentations is not None:
+            input_features = self.augmentations(input_features)
         return input_features
 
 
@@ -250,30 +253,34 @@ class ResnetLogmel1ChannelBreath(CustomDataset):
 
 
 
-class BrogrammersMfccHighRes(CustomDataset):
+class MultipleInstanceLearningMFCC(CustomDataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
                  verbose=True, mode="train"):
         self.n_channels = 1
         self.n_timesteps = 259
-        super(BrogrammersMfccHighRes, self).__init__(user_ids, original_files, transform, augmentations,
+        super(MultipleInstanceLearningMFCC, self).__init__(user_ids, original_files, transform, augmentations,
                                                      augmented_files, verbose, mode)
 
     def get_input_features(self, idx):
-        # input_features = self.participants[idx].heavy_cough.MFCCs
         input_features = self.participants[idx].recordings[self.types_of_recording].features
 
         input_features = self.z_normalize(input_features)
-        if self.mode == "train":
-            input_features = self.transform(input_features)
-        else:
-            input_features = evenly_distributed_cyclic_shifts(input_features, n_output_timesteps=self.n_timesteps, n=10)
-            input_features = torch.Tensor(input_features)
+        if self.augmentations is not None:
+            input_features = self.augmentations(input_features)
+        # if self.mode == "train":
+        #     input_features = self.transform(input_features)
+        # else:
+        input_features = evenly_distributed_cyclic_shifts(input_features, n_output_timesteps=self.n_timesteps, n=10)
+        input_features = np.expand_dims(input_features, 1)
+
+        input_features = torch.Tensor(input_features)
 
         return input_features
 
     @staticmethod
     def get_feature_statistics():
         # why do I have to convert it to float32???
+        # because float64 is double and float and double don't mix in torch?
         mu = np.load("data/Coswara_processed/pickles/mean_cough_heavy_15MFCCs.npy")
         mu = np.expand_dims(mu, axis=1).astype("float32")
         sigma = np.load("data/Coswara_processed/pickles/stds_cough_heavy_15MFCCs.npy")

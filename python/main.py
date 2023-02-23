@@ -1,10 +1,10 @@
 import pandas as pd
 from audio_processing import FeatureSet
-from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50
+from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50, BrogrammersMIL
 from evaluation_and_tracking import IntraEpochMetricsTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift
 from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, ResnetLogmel3Channels, ResnetLogmel1ChannelBreath, \
-    BrogrammersMfccHighRes
+    MultipleInstanceLearningMFCC
 from datetime import datetime
 import time
 import numpy as np
@@ -25,10 +25,25 @@ import tkinter as tk
 from tkinter.messagebox import askyesno
 
 dataset_collection = {
+    "mfcc_mil_combined_cough": {
+        "dataset_class": MultipleInstanceLearningMFCC,
+        "participants_file": "2023_02_23_mfcc_combined_coughs_3s.pickle",
+        "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
+    },
+    "mfccs_3s_breathing_deep": {
+        "dataset_class": BrogrammersMFCCDataset,
+        "participants_file": "2023_02_21_mfcc_breathing-deep_3s_22kHz.pickle",
+        "augmented_files": None
+    },
+    "mfccs_3s_combined_coughs": {
+        "dataset_class": BrogrammersMFCCDataset,
+        "participants_file": "2023_02_23_mfcc_combined_coughs_3s.pickle",
+        "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
+    },
     "15_mfccs_highres_new": {
         "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_02_11_cough_15mfcc_highres.pickle",
-        "augmented_files": ["2023_02_11_cough_15mfcc_highres_augmented.pickle"],
+        "participants_file": "2023_02_21_mfcc_cough-heavy_3s_22kHz.pickle",
+        "augmented_files": ["2023_02_21_mfcc_cough-heavy_3s_22kHz_augmented.pickle"],
         # "augmented_files": None
     },
     "brogrammers_new": {
@@ -128,7 +143,10 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
     model.train()
     input_data, label = current_batch
     input_data, label = input_data.to(device), label.to(device)
+
     prediction = torch.squeeze(model(input_data))
+    if prediction.dim() == 0:
+        prediction = torch.unsqueeze(prediction, dim=0)
     loss = current_loss_func(prediction, label)
     # accuracy = get_accuracy(prediction, label)
     my_tracker.add_metrics(loss, label, prediction)
@@ -144,6 +162,8 @@ def evaluate_batch(model, current_batch, loss_function, my_tracker):
     input_data, label = current_batch
     input_data, label = input_data.to(device), label.to(device)
     prediction = torch.squeeze(model(input_data))
+    if prediction.dim() == 0:
+        prediction = torch.unsqueeze(prediction, dim=0)
     loss = loss_function(prediction, label)
     # pred_after_sigmoid = torch.sigmoid(prediction)
     # accuracy = get_accuracy(prediction, label)
@@ -257,7 +277,12 @@ def get_data_loaders(training_set, validation_set, params):
         train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler)
     else:
         train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True)
-    val = DataLoader(dataset=validation_set, batch_size=len(val_set))
+
+    if USE_MIL:
+        val = DataLoader(dataset=validation_set, batch_size=1)
+    else:
+        val = DataLoader(dataset=validation_set, batch_size=len(val_set))
+    # TODO wrong if i use MIL: it also needs to be batch size=1
     return train, val
 
 
@@ -266,7 +291,8 @@ def get_model(model_name, verbose=True, load_from_disc=False):
         "brogrammers": BrogrammersModel,
         "brogrammers_old": BrogrammersSequentialModel,
         "resnet18": get_resnet18,
-        "resnet50": get_resnet50
+        "resnet50": get_resnet50,
+        "MIL_brogrammers": BrogrammersMIL
     }
     my_model = model_dict[model_name]().to(device)
 
@@ -329,36 +355,38 @@ random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
                 66445511337, 316497938271, 161094, 191919191, 101010107]
 
 # ###############################################  manual setup  #######################################################
-USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of a 80/20 split without test set
+USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
 QUICK_TRAIN_FOR_TESTS = False
+USE_MIL = True
 
-n_epochs = 50
+n_epochs = 20
 n_cross_validation_runs = 5
 
 parameters = dict(
     # rand=random_seeds[:n_cross_validation_runs],
-    batch=[32, 64, 128],
-    lr=[1e-3, 1e-4, 1e-5],
+    batch=[1],
+    lr=[1e-5],
     wd=[1e-4],  # weight decay regularization
-    lr_decay=[0.85, 0.925, 1],
+    lr_decay=[0.95],
     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples will be used
-    mixup_p=[0.0, 1],  # probability of mix up being used at all
-    use_augm_datasets=[True],
+    mixup_p=[1.0],  # probability of mix up being used at all
+    use_augm_datasets=[False],
     shift=[True],
     sigma=[0.05],
     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
-    class_weight=[1],  # factor for loss of the positive class to address class imbalance
+    class_weight=[1.6],  # factor for loss of the positive class to address class imbalance
 )
 
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
-# "brogrammers", "resnet18", "resnet50"
-MODEL_NAME = "brogrammers"
+# "brogrammers", "resnet18", "resnet50", MIL_brogrammers
+MODEL_NAME = "MIL_brogrammers"
 # logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath
-# 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new
-DATASET_NAME = "brogrammers_new"
-RUN_COMMENT = f"train_val_test_larger_run"
+# 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new, mfccs_3s_combined_coughs, mfccs_3s_breathing_deep
+# mfcc_mil_combined_cough
+DATASET_NAME = "mfcc_mil_combined_cough"
+RUN_COMMENT = f""
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -387,7 +415,7 @@ for p in get_parameter_combinations(parameters, verbose=True):
 
         train_set.augmentations = get_online_augmentations(p)
         if TRACK_METRICS:
-            writer = SummaryWriter(log_dir=f"run/{RUN_NAME}/{p}")
+            writer = SummaryWriter(log_dir=f"run/tensorboard_saves/{RUN_NAME}/{p}")
 
         train_loader, eval_loader = get_data_loaders(train_set, val_set, p)
         my_cnn = get_model(MODEL_NAME, load_from_disc=LOAD_FROM_DISC, verbose=False)
@@ -423,7 +451,7 @@ for p in get_parameter_combinations(parameters, verbose=True):
             if TESTING_MODE:
                 print(f"current learning rates: {[round(lr, 8) for lr in lr_scheduler.get_last_lr()]}")
         # ##############################################################################################################
-        if VERBOSE:
+        if VERBOSE or True:
             delta_t = time.time() - epoch_start
             print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
 

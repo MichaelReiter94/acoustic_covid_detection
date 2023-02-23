@@ -73,26 +73,29 @@ class AudioRecording:
         if self.augmentations is not None:
             audio = self.augmentations(audio, self.original_sr)
 
+        if self.target_sr != self.original_sr:
+            audio = librosa.resample(y=audio, orig_sr=self.original_sr, target_sr=self.target_sr)
+
         if self.type_of_features.lower() == "mfcc":
-            self.features = self.get_mfccs(audio, audio_parameters)
+            self.features = self.get_mfccs(audio)
         elif self.type_of_features.lower() == "logmel":
-            self.features = self.get_logmel_spectrum(audio, audio_parameters)
+            self.features = self.get_logmel_spectrum(audio)
         else:
             raise KeyError
 
-    def get_mfccs(self, audio, audio_parameters):
-        if self.target_sr != self.original_sr:
-            audio = librosa.resample(y=audio, orig_sr=self.original_sr, target_sr=self.target_sr)
+    def get_mfccs(self, audio):
+        # if self.target_sr != self.original_sr:
+        #     audio = librosa.resample(y=audio, orig_sr=self.original_sr, target_sr=self.target_sr)
 
         mfccs = librosa.feature.mfcc(y=audio, win_length=self.window_length, n_fft=self.n_fft, htk=True, fmax=self.fmax,
                                      fmin=self.fmin, hop_length=self.hop_size, n_mfcc=self.n_features,
                                      sr=self.target_sr, n_mels=224)
         return mfccs
 
-    def get_logmel_spectrum(self, audio, audio_parameters):
+    def get_logmel_spectrum(self, audio):
         # total duration = 2.6 seconds (512 samples hopsize = 11.6ms --> 11.6ms * 224 (frames for resnet input) = 2.6s
-        if self.target_sr != self.original_sr:
-            audio = librosa.resample(y=audio, orig_sr=self.original_sr, target_sr=self.target_sr)
+        # if self.target_sr != self.original_sr:
+        #     audio = librosa.resample(y=audio, orig_sr=self.original_sr, target_sr=self.target_sr)
 
         mel_spect = librosa.feature.melspectrogram(y=audio, n_fft=self.n_fft, hop_length=self.hop_size,
                                                    win_length=self.window_length, n_mels=self.n_features,
@@ -106,7 +109,7 @@ class AudioRecording:
             if trim_silence_below_x_dB is not None:
                 audio, _ = librosa.effects.trim(audio, top_db=trim_silence_below_x_dB)
         else:
-            audio = np.array([])
+            audio = np.array([]).astype("float32")
             for path in self.file_path:
                 audio_temp, sr = librosa.load(path, sr=None)
                 if trim_silence_below_x_dB is not None:

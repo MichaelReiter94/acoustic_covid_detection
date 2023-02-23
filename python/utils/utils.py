@@ -4,7 +4,7 @@ import smtplib
 def send_mail(to_address, text, subject="This is no spam"):
     gmail = "hundreddaysofcodemr@gmail.com"
     # noinspection SpellCheckingInspection
-    gmail_app_pw = "wgqvfuvilcsplgdb"
+    gmail_app_pw = "fvgxkqbqzeeogjkv"
     with smtplib.SMTP("smtp.gmail.com", port=587) as connection:
         connection.starttls()  # encryption
         connection.login(user=gmail, password=gmail_app_pw)
@@ -58,3 +58,7 @@ def audiomentations_repr(audiomentation_compose):
         representation[name] = param_string
         # print(f"{name}{params}")
     return representation
+
+
+if __name__ == "__main__":
+    send_mail("michael.reiter94@gmail.com", "this is a test", subject="This is no spam")
