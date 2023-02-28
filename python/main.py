@@ -1,10 +1,10 @@
 import pandas as pd
 from audio_processing import FeatureSet
-from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50, BrogrammersMIL
+from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50, BrogrammersMIL, \
+    Resnet18MIL, PredLevelMIL
 from evaluation_and_tracking import IntraEpochMetricsTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift
-from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, ResnetLogmel3Channels, ResnetLogmel1ChannelBreath, \
-    MultipleInstanceLearningMFCC
+from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, MultipleInstanceLearningMFCC, MILResnet
 from datetime import datetime
 import time
 import numpy as np
@@ -20,20 +20,39 @@ from collections import namedtuple
 from itertools import product
 import os
 import random
-from torch.optim.lr_scheduler import ExponentialLR
+from torch.optim.lr_scheduler import ExponentialLR, ReduceLROnPlateau
 import tkinter as tk
 from tkinter.messagebox import askyesno
 
 dataset_collection = {
+    "resnet_mil_combined_cough": {
+        "dataset_class": MILResnet,
+        "participants_file": "2023_02_25_logmel_combined_coughs_3s.pickle",
+        # "augmented_files":  ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle"]
+        "augmented_files": ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle",
+                            "2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
+    },
     "mfcc_mil_combined_cough": {
         "dataset_class": MultipleInstanceLearningMFCC,
         "participants_file": "2023_02_23_mfcc_combined_coughs_3s.pickle",
-        "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
+        # "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
+        # "augmented_files": ["2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
+        "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle",
+                            "2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
     },
     "mfccs_3s_breathing_deep": {
         "dataset_class": BrogrammersMFCCDataset,
         "participants_file": "2023_02_21_mfcc_breathing-deep_3s_22kHz.pickle",
         "augmented_files": None
+    },
+    "logmel_3s_combined_coughs": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_02_25_logmel_combined_coughs_3s.pickle",
+        "augmented_files": ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle",
+                            "2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
+        # "augmented_files": ["2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
+
+
     },
     "mfccs_3s_combined_coughs": {
         "dataset_class": BrogrammersMFCCDataset,
@@ -72,24 +91,24 @@ dataset_collection = {
         "augmented_files": ["2022-11-25-added_logmel224x224.pickle"]
         # "augmented_files": None
     },
-    "logmel_3_channels_512_2048_8192": {
-        "dataset_class": ResnetLogmel3Channels,
-        "participants_file": "2022-12-08_logmel_3_channel_noAug_noBadAudio.pickle",
-        "augmented_files": ["2022-12-08_logmel_3_channel_augmented_noBadAudio.pickle"]
-        # "augmented_files": None
-    },
-    "logmel_3_channels_1024_2048_4096": {
-        "dataset_class": ResnetLogmel3Channels,
-        "participants_file": "2022-12-10_logmel_3_channel_noAug_1024x2048x4096.pickle",
-        "augmented_files": ["2022-12-10_logmel_3_channel_augmented_1024x2048x4096.pickle"]
-        # "augmented_files": None
-    },
-    "logmel_1_channel_breath": {
-        "dataset_class": ResnetLogmel1ChannelBreath,
-        "participants_file": "2022-12-11_logmel_1_channel_noAug_heavy_breathing.pickle",
-        "augmented_files": ["2022-12-11_logmel_1_channel_augmented_heavy_breathing.pickle"]
-        # "augmented_files": None
-    }
+    # "logmel_3_channels_512_2048_8192": {
+    #     "dataset_class": ResnetLogmel3Channels,
+    #     "participants_file": "2022-12-08_logmel_3_channel_noAug_noBadAudio.pickle",
+    #     "augmented_files": ["2022-12-08_logmel_3_channel_augmented_noBadAudio.pickle"]
+    #     # "augmented_files": None
+    # },
+    # "logmel_3_channels_1024_2048_4096": {
+    #     "dataset_class": ResnetLogmel3Channels,
+    #     "participants_file": "2022-12-10_logmel_3_channel_noAug_1024x2048x4096.pickle",
+    #     "augmented_files": ["2022-12-10_logmel_3_channel_augmented_1024x2048x4096.pickle"]
+    #     # "augmented_files": None
+    # },
+    # "logmel_1_channel_breath": {
+    #     "dataset_class": ResnetLogmel1ChannelBreath,
+    #     "participants_file": "2022-12-11_logmel_1_channel_noAug_heavy_breathing.pickle",
+    #     "augmented_files": ["2022-12-11_logmel_1_channel_augmented_heavy_breathing.pickle"]
+    #     # "augmented_files": None
+    # }
 }
 device = "cuda" if torch.cuda.is_available() else "cpu"
 TESTING_MODE = not torch.cuda.is_available()
@@ -267,10 +286,16 @@ def get_data_loaders(training_set, validation_set, params):
     # for (data, label) in training_set:
     #     sample_weights.append(label_weights[int(label)])
 
-    sample_weights = [label_weights[int(label)] for (data, label) in training_set]
+    # sample_weights = [label_weights[int(label)] for (data, label) in training_set]
+    sample_weights = [label_weights[int(label)] for label in training_set.labels]
+
 
     # might actually set num_samples higher because like this not all samples from the dataset are chosen within 1 epoch
-    sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
+    # or fix to "lower" num_sumbples so that we always have the same number of samples within an epoch, no matter how
+    # many augmented samples will be added to the training data. This adds comparability between runs.
+
+    # sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
+    sampler = WeightedRandomSampler(sample_weights, num_samples=500, replacement=True)
 
     # create dataloaders
     if params.weighted_sampler:
@@ -282,7 +307,6 @@ def get_data_loaders(training_set, validation_set, params):
         val = DataLoader(dataset=validation_set, batch_size=1)
     else:
         val = DataLoader(dataset=validation_set, batch_size=len(val_set))
-    # TODO wrong if i use MIL: it also needs to be batch size=1
     return train, val
 
 
@@ -292,7 +316,9 @@ def get_model(model_name, verbose=True, load_from_disc=False):
         "brogrammers_old": BrogrammersSequentialModel,
         "resnet18": get_resnet18,
         "resnet50": get_resnet50,
-        "MIL_brogrammers": BrogrammersMIL
+        "MIL_brogrammers": BrogrammersMIL,
+        "Resnet18_MIL": Resnet18MIL,
+        "PredictionLevelMIL_mfcc": PredLevelMIL
     }
     my_model = model_dict[model_name]().to(device)
 
@@ -327,7 +353,7 @@ def get_optimizer(model_name, load_from_disc=False):
     return my_optimizer
 
 
-def write_metrics_to_tensorboard(mode):
+def write_metrics(mode):
     metrics = tracker.get_epoch_metrics()
     if TRACK_METRICS:
         writer.add_scalar(f"01_loss/{mode}", metrics["loss"], epoch)
@@ -339,6 +365,7 @@ def write_metrics_to_tensorboard(mode):
         writer.add_scalar(f"07_TrueNegativeRate_or_Specificity/{mode}", metrics["tnr"], epoch)
         writer.add_scalar(f"08_Precision_or_PositivePredictiveValue/{mode}", metrics["precision"], epoch)
         writer.add_scalar(f"09_true_positives_at_95/{mode}", metrics["tpr_at_95"], epoch)
+    return metrics["loss"]
 
 
 def get_online_augmentations(run_parameters):
@@ -357,36 +384,37 @@ random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
 # ###############################################  manual setup  #######################################################
 USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
 QUICK_TRAIN_FOR_TESTS = False
-USE_MIL = True
+USE_MIL = True  # if true the batch size of the validation set is set to 1. otherwise it is the full length of the set
 
-n_epochs = 20
-n_cross_validation_runs = 5
+n_epochs = 80
+n_cross_validation_runs = 1
 
 parameters = dict(
     # rand=random_seeds[:n_cross_validation_runs],
-    batch=[1],
-    lr=[1e-5],
+    batch=[32],
+    lr=[1e-4],
     wd=[1e-4],  # weight decay regularization
-    lr_decay=[0.95],
+    lr_decay=[0.975],
     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples will be used
-    mixup_p=[1.0],  # probability of mix up being used at all
-    use_augm_datasets=[False],
+    mixup_p=[0.5],  # probability of mix up being used at all
+    use_augm_datasets=[True],
     shift=[True],
     sigma=[0.05],
     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
-    class_weight=[1.6],  # factor for loss of the positive class to address class imbalance
+    class_weight=[1],  # factor for loss of the positive class to address class imbalance
 )
 
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
+if USE_MIL:
+    parameters["batch"] = [1]
 
-# "brogrammers", "resnet18", "resnet50", MIL_brogrammers
-MODEL_NAME = "MIL_brogrammers"
-# logmel_3_channels_512_2048_8192, logmel_3_channels_1024_2048_4096, logmel_1_channel, logmel_1_channel_breath
-# 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new, mfccs_3s_combined_coughs, mfccs_3s_breathing_deep
-# mfcc_mil_combined_cough
+# "brogrammers", "resnet18", "resnet50", MIL_brogrammers, Resnet18_MIL, PredictionLevelMIL_mfcc
+MODEL_NAME = "PredictionLevelMIL_mfcc"
+# logmel_1_channel, 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new,mfccs_3s_breathing_deep
+# mfccs_3s_combined_coughs, logmel_3s_combined_coughs, mfcc_mil_combined_cough, resnet_mil_combined_cough
 DATASET_NAME = "mfcc_mil_combined_cough"
-RUN_COMMENT = f""
+RUN_COMMENT = f"bag_statistics_linear_combination4"
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -422,6 +450,7 @@ for p in get_parameter_combinations(parameters, verbose=True):
 
         optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
         lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
+        # lr_scheduler = ReduceLROnPlateau(optimizer, patience=5, verbose=True, factor=0.1)
         loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight])).to(device)
         # loss_func = nn.BCEWithLogitsLoss().to(device)
         tracker.save_model_and_training_parameters(my_cnn, optimizer, loss_func)
@@ -440,18 +469,20 @@ for p in get_parameter_combinations(parameters, verbose=True):
             tracker.reset(p, mode="train")
             for i, batch in enumerate(train_loader):
                 train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
-            write_metrics_to_tensorboard(mode="train")
+            epoch_loss = write_metrics(mode="train")
 
             with torch.no_grad():
                 tracker.reset(p, mode="eval")
                 for i, batch in enumerate(eval_loader):
                     evaluate_batch(my_cnn, batch, loss_func, tracker)
-                write_metrics_to_tensorboard(mode="eval")
+                epoch_loss = write_metrics(mode="eval")
             lr_scheduler.step()
+            # lr_scheduler.step(epoch_loss)
+
             if TESTING_MODE:
                 print(f"current learning rates: {[round(lr, 8) for lr in lr_scheduler.get_last_lr()]}")
         # ##############################################################################################################
-        if VERBOSE or True:
+        if VERBOSE:
             delta_t = time.time() - epoch_start
             print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
 

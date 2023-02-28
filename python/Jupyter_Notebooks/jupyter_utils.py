@@ -29,7 +29,7 @@ def load_tracker(verbosity=None):
     with open(path, "rb") as f:
         tracker = pickle.load(f)
 
-    tracker.compute_overall_metrics(smooth_n_samples=10, ignore_first_n_epochs=10,
+    tracker.compute_overall_metrics(smooth_n_samples=5, ignore_first_n_epochs=5,
                                     metric_used_for_performance_analysis="auc_roc")
     if verbosity is not None:
         tracker.summarize(verbosity)

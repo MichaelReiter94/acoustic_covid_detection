@@ -324,10 +324,10 @@ def get_accuracy(labels, predictions, threshold=0.5, verbose=False):
     labels_bool = labels > threshold
     predicted_labels = predictions > threshold
     n_correctly_predicted = np.sum(predicted_labels == labels_bool) / len(predictions)
-    if verbose:
-        print(f"\nactual positive labels: {np.sum(labels_bool)}")
-        print(f"predicted as positive: {np.sum(predicted_labels)}")
-        print(f"correctly predicted: {round(n_correctly_predicted * 100, 2)}%")
+    # if verbose:
+    #     print(f"\nactual positive labels: {np.sum(labels_bool)}")
+    #     print(f"predicted as positive: {np.sum(predicted_labels)}")
+    #     print(f"correctly predicted: {round(n_correctly_predicted * 100, 2)}%")
     return n_correctly_predicted
 
 
@@ -335,10 +335,14 @@ def get_confusion_matrix_parameters(labels, predictions, threshold=0.5, verbose=
     predictions_bool = predictions > threshold
     labels_bool = labels > threshold
     confusion_mat = confusion_matrix(labels_bool, predictions_bool)
+    mat = np.flip(confusion_mat)
+    mat = np.concatenate([mat, np.expand_dims(mat.sum(axis=1), 1)], axis=1)
+    mat = np.concatenate([mat, np.expand_dims(mat.sum(axis=0), 0)], axis=0)
     if verbose:
         print("##########################################################################\n")
-        print(pd.DataFrame(np.flip(confusion_mat), columns=["Pred. [+]", "Pred. [-]"],
-                           index=["Actual [+]", "Actual [-]"]))
+        print(pd.DataFrame(mat, columns=["Pred. [+]", "Pred. [-]", "True Total"],
+                           index=["True [+]", "True [-]", "Pred. Total"]))
+
     # returns parameters in the following order: tn, fp, fn, tp
     return confusion_mat.ravel()
 
@@ -570,6 +574,13 @@ class IntraEpochMetricsTracker:
             confusion_mat=confusion_mat,
         )
         self.current_run.add_epoch_metrics(metric_dict, mode=self.mode)
+        if self.verbose:
+            print(f"Epoch:     {len(self.current_run.metrics['train']['loss'])}")
+            print(f"Loss:      {round(metric_dict['loss'], 3)}")
+            print(f"AUC ROC:   {round(metric_dict['auc_roc']*100, 1)}%")
+            print(f"Accuracy:  {round(metric_dict['accuracy']*100, 1)}%")
+            print(f"F1-score:  {round(metric_dict['f1_score']*100, 1)}%")
+
         return metric_dict
 
     def get_aucroc(self):

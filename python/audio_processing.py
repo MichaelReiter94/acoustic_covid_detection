@@ -213,9 +213,9 @@ combined_recordings = {
 }
 
 audio_parameters = dict(
-    type_of_features="mfcc",  # logmel | mfcc
-    n_time_steps=259,  # 259 | 224
-    n_features=15,  # 15 | 224
+    type_of_features="logmel",  # logmel | mfcc
+    n_time_steps=224,  # 259 | 224
+    n_features=224,  # 15 | 224
     sample_rate=22050,
     n_fft=512 * 16,
     window_length=512,
@@ -227,5 +227,5 @@ audio_parameters = dict(
 if __name__ == "__main__":
     feature_set = FeatureSet("combined_coughs", audio_parameters)
     feature_set.create_participant_objects(augmentations=time_domain_augmentations,
-                                           augmentations_per_label=(1, 7))
-    feature_set.save_to("3s_highres_7x")
+                                           augmentations_per_label=(2, 2))
+    feature_set.save_to("3s_augmented_x2x2")

@@ -9,26 +9,14 @@ from audio_processing import FeatureSet
 from utils.utils import audiomentations_repr
 
 
-
-def evenly_distributed_cyclic_shifts(input_matrix, n_output_timesteps, n=10):
-    # from a 2D time frequency/quefrency matrix of m time indices create n matrices with fixed "output_size". These
-    # matrices are all shifted by 1/n of the total number of time indices
-    total_time_steps = input_matrix.shape[-1]
-    if total_time_steps < n_output_timesteps:
-        input_matrix = np.pad(input_matrix, ((0, 0), (0, n_output_timesteps - total_time_steps)))
-        total_time_steps = n_output_timesteps
-
-    delta_shift = total_time_steps // n
-    shifts = [i*delta_shift for i in range(n)]
-    # print(shifts)
-    output_matrices = np.array([np.roll(input_matrix, shift=shift, axis=-1) for shift in shifts])
-    output_matrices = output_matrices[:, :, :n_output_timesteps]
-    return output_matrices
-
-
 class CustomDataset(Dataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode="train"):
+                 verbose=True, mode=None):
+
+        if mode is None:
+            print("no mode (train or eval) specified for dataset")
+            raise ValueError
+
         self.mode = mode
         self.user_ids = user_ids
 
@@ -64,15 +52,40 @@ class CustomDataset(Dataset):
 
         self.mix_up_alpha = 0.2
         self.mix_up_probability = 1.0
+        self.bag_size = 1
+
+    def evenly_distributed_cyclic_shifts(self, input_matrix, n_output_timesteps, shift_std=0.25):
+        # from a 2D time frequency/quefrency matrix of m time indices create n matrices with fixed "output_size". These
+        # matrices are all shifted by 1/n of the total number of time indices
+        # TODO implement better:
+        # n = np.random.randint(4, 32)
+        n = self.bag_size
+        total_time_steps = input_matrix.shape[-1]
+        if total_time_steps < n_output_timesteps:
+            input_matrix = np.pad(input_matrix, ((0, 0), (0, n_output_timesteps - total_time_steps)))
+            total_time_steps = n_output_timesteps
+
+        delta_shift = total_time_steps // n
+
+        if self.mode == "eval":
+            shift_std = 0.0
+
+        shifts = [i * delta_shift for i in range(n)]
+        shifts += (np.random.randn(n) * shift_std * delta_shift).astype("int")  #
+
+        # print(shifts)
+        output_matrices = np.array([np.roll(input_matrix, shift=shift, axis=-1) for shift in shifts])
+        output_matrices = output_matrices[:, :, :n_output_timesteps]
+        return output_matrices
 
     def drop_invalid_labels(self):
         self.participants = [participant for participant in self.participants if participant.get_label() is not None]
 
     # def drop_bad_audio(self):
-        # self.participants = [participant for participant in self.participants if
-        #                      participant.meta_data["audio_quality_heavy_cough"] > 0.0]
+    # self.participants = [participant for participant in self.participants if
+    #                      participant.meta_data["audio_quality_heavy_cough"] > 0.0]
 
-    def get_input_features(self, idx):
+    def get_input_features(self, idx, for_mix_up=False):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
         input_features = self.transform(input_features)
         if self.augmentations is not None:
@@ -101,7 +114,11 @@ class CustomDataset(Dataset):
 
         n_channels = input_features.shape[-3]
         if n_channels < self.n_channels:
-            input_features = input_features.expand(3, -1, -1)
+            if input_features.dim() == 3:
+                input_features = input_features.expand(3, -1, -1)
+            elif input_features.dim() == 4:
+                input_features = input_features.expand(-1, 3, -1, -1)
+
         return input_features, torch.tensor(output_label).float()
 
     def __len__(self):
@@ -144,7 +161,7 @@ class CustomDataset(Dataset):
             mixup_idx = np.random.randint(self.__len__())
             mixup_label = self.participants[mixup_idx].get_label()
 
-        mixup_sample = self.get_input_features(mixup_idx)
+        mixup_sample = self.get_input_features(mixup_idx, for_mix_up=True)
         if self.augmentations is not None:
             mixup_sample = self.augmentations(mixup_sample)
 
@@ -153,7 +170,6 @@ class CustomDataset(Dataset):
             mixup_sample = torch.nn.functional.pad(mixup_sample, (0, self.n_timesteps - n_timesteps))
         elif n_timesteps > self.n_timesteps:
             mixup_sample = mixup_sample[:, :, :self.n_timesteps]
-
 
         lamda = np.random.beta(self.mix_up_alpha, self.mix_up_alpha)
         mixed_up_label = lamda * orig_label + (1 - lamda) * mixup_label
@@ -167,7 +183,7 @@ class BrogrammersMFCCDataset(CustomDataset):
         self.n_channels = 1
         self.n_timesteps = 259
         super(BrogrammersMFCCDataset, self).__init__(user_ids, original_files, transform, augmentations,
-                                                     augmented_files, verbose)
+                                                     augmented_files, verbose, mode)
 
     def get_input_features(self, idx):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
@@ -177,7 +193,6 @@ class BrogrammersMFCCDataset(CustomDataset):
         if self.augmentations is not None:
             input_features = self.augmentations(input_features)
         return input_features
-
 
     @staticmethod
     def get_feature_statistics():
@@ -191,7 +206,7 @@ class BrogrammersMFCCDataset(CustomDataset):
 
 class ResnetLogmelDataset(CustomDataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode="train"):
+                 verbose=True, mode=None):
         self.n_channels = 3
         self.n_timesteps = 224
         self.frequency_resolution = 224
@@ -203,54 +218,49 @@ class ResnetLogmelDataset(CustomDataset):
     #     input_features = self.transform(input_features)
     #     return input_features
 
-
-
-
     @staticmethod
     def get_feature_statistics():
         # do nothing - no normalization
         return 0., 1.
 
 
-class ResnetLogmel3Channels(CustomDataset):
-    def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode="train"):
-        self.n_channels = 3
-        self.n_timesteps = 224
-        self.frequency_resolution = 224
-        super(ResnetLogmel3Channels, self).__init__(user_ids, original_files, transform,
-                                                    augmentations, augmented_files, verbose, mode)
-
-    # def get_input_features(self, idx):
-    #     input_features = self.participants[idx].heavy_cough.logmel_3c
-    #     return torch.Tensor(input_features)
-
-    @staticmethod
-    def get_feature_statistics():
-        # do nothing - no normalization
-        return 0., 1.
-
-
-class ResnetLogmel1ChannelBreath(CustomDataset):
-    def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode="train"):
-        self.n_channels = 3
-        self.n_timesteps = 224
-        self.frequency_resolution = 224
-        super(ResnetLogmel1ChannelBreath, self).__init__(user_ids, original_files, transform,
-                                                         augmentations, augmented_files, verbose, mode)
-
-    # def get_input_features(self, idx):
-    #     input_features = self.participants[idx].deep_breath.logmel
-    #     input_features = self.transform(input_features)
-    #     return input_features
-
-    @staticmethod
-    def get_feature_statistics():
-        # do nothing - no normalization
-        return 0., 1.
+# class ResnetLogmel3Channels(CustomDataset):
+#     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
+#                  verbose=True, mode="train"):
+#         self.n_channels = 3
+#         self.n_timesteps = 224
+#         self.frequency_resolution = 224
+#         super(ResnetLogmel3Channels, self).__init__(user_ids, original_files, transform,
+#                                                     augmentations, augmented_files, verbose, mode)
+#
+#     # def get_input_features(self, idx):
+#     #     input_features = self.participants[idx].heavy_cough.logmel_3c
+#     #     return torch.Tensor(input_features)
+#
+#     @staticmethod
+#     def get_feature_statistics():
+#         # do nothing - no normalization
+#         return 0., 1.
 
 
+# class ResnetLogmel1ChannelBreath(CustomDataset):
+#     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
+#                  verbose=True, mode="train"):
+#         self.n_channels = 3
+#         self.n_timesteps = 224
+#         self.frequency_resolution = 224
+#         super(ResnetLogmel1ChannelBreath, self).__init__(user_ids, original_files, transform,
+#                                                          augmentations, augmented_files, verbose, mode)
+#
+#     # def get_input_features(self, idx):
+#     #     input_features = self.participants[idx].deep_breath.logmel
+#     #     input_features = self.transform(input_features)
+#     #     return input_features
+#
+#     @staticmethod
+#     def get_feature_statistics():
+#         # do nothing - no normalization
+#         return 0., 1.
 
 
 class MultipleInstanceLearningMFCC(CustomDataset):
@@ -259,9 +269,9 @@ class MultipleInstanceLearningMFCC(CustomDataset):
         self.n_channels = 1
         self.n_timesteps = 259
         super(MultipleInstanceLearningMFCC, self).__init__(user_ids, original_files, transform, augmentations,
-                                                     augmented_files, verbose, mode)
+                                                           augmented_files, verbose, mode)
 
-    def get_input_features(self, idx):
+    def get_input_features(self, idx, for_mix_up=False):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
 
         input_features = self.z_normalize(input_features)
@@ -270,7 +280,16 @@ class MultipleInstanceLearningMFCC(CustomDataset):
         # if self.mode == "train":
         #     input_features = self.transform(input_features)
         # else:
-        input_features = evenly_distributed_cyclic_shifts(input_features, n_output_timesteps=self.n_timesteps, n=10)
+
+        # TODO this is not a great implementation
+        if not for_mix_up:
+            # self.bag_size = np.random.randint(4, 32)
+            self.bag_size = np.random.randint(4, 16)
+        if self.mode == "eval":
+            # self.bag_size = 16
+            self.bag_size = 8
+
+        input_features = self.evenly_distributed_cyclic_shifts(input_features, n_output_timesteps=self.n_timesteps)
         input_features = np.expand_dims(input_features, 1)
 
         input_features = torch.Tensor(input_features)
@@ -286,3 +305,43 @@ class MultipleInstanceLearningMFCC(CustomDataset):
         sigma = np.load("data/Coswara_processed/pickles/stds_cough_heavy_15MFCCs.npy")
         sigma = np.expand_dims(sigma, axis=1).astype("float32")
         return mu, sigma
+
+
+class MILResnet(CustomDataset):
+    def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
+                 verbose=True, mode=None):
+        self.n_channels = 3
+        self.n_timesteps = 224
+        self.frequency_resolution = 224
+        super(MILResnet, self).__init__(user_ids, original_files, transform, augmentations, augmented_files, verbose,
+                                        mode)
+
+
+    def get_input_features(self, idx, for_mix_up=False):
+        input_features = self.participants[idx].recordings[self.types_of_recording].features
+
+        # input_features = self.z_normalize(input_features)
+        if self.augmentations is not None:
+            input_features = self.augmentations(input_features)
+        # if self.mode == "train":
+        #     input_features = self.transform(input_features)
+        # else:
+
+        # TODO this is not a great implementation
+        if not for_mix_up:
+            self.bag_size = np.random.randint(4, 16)
+        if self.mode == "eval":
+            self.bag_size = 8
+
+        input_features = self.evenly_distributed_cyclic_shifts(input_features, n_output_timesteps=self.n_timesteps)
+        input_features = np.expand_dims(input_features, 1)
+
+        input_features = torch.Tensor(input_features)
+
+        return input_features
+
+
+    @staticmethod
+    def get_feature_statistics():
+        # do nothing - no normalization
+        return 0., 1.
