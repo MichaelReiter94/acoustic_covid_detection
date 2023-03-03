@@ -227,5 +227,5 @@ audio_parameters = dict(
 if __name__ == "__main__":
     feature_set = FeatureSet("combined_coughs", audio_parameters)
     feature_set.create_participant_objects(augmentations=time_domain_augmentations,
-                                           augmentations_per_label=(2, 2))
-    feature_set.save_to("3s_augmented_x2x2")
+                                           augmentations_per_label=(1, 4))
+    feature_set.save_to("3s_x1x4")

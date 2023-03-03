@@ -57,6 +57,8 @@ dataset_collection = {
     "mfccs_3s_combined_coughs": {
         "dataset_class": BrogrammersMFCCDataset,
         "participants_file": "2023_02_23_mfcc_combined_coughs_3s.pickle",
+        # "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle",
+        #                     "2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
         "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
     },
     "15_mfccs_highres_new": {
@@ -310,7 +312,7 @@ def get_data_loaders(training_set, validation_set, params):
     return train, val
 
 
-def get_model(model_name, verbose=True, load_from_disc=False):
+def get_model(model_name, params, verbose=True, load_from_disc=False):
     model_dict = {
         "brogrammers": BrogrammersModel,
         "brogrammers_old": BrogrammersSequentialModel,
@@ -320,7 +322,10 @@ def get_model(model_name, verbose=True, load_from_disc=False):
         "Resnet18_MIL": Resnet18MIL,
         "PredictionLevelMIL_mfcc": PredLevelMIL
     }
-    my_model = model_dict[model_name]().to(device)
+    if model_name in ["MIL_brogrammers", "Resnet18_MIL", "PredictionLevelMIL_mfcc"]:
+        my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons).to(device)
+    else:
+        my_model = model_dict[model_name]().to(device)
 
     # # print model summary
     if verbose:
@@ -378,7 +383,7 @@ def get_online_augmentations(run_parameters):
 
 # </editor-fold>
 
-random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
+random_seeds = [99468865, 123587955, 215674, 3213213211, 55555555,
                 66445511337, 316497938271, 161094, 191919191, 101010107]
 
 # ###############################################  manual setup  #######################################################
@@ -386,13 +391,13 @@ USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 spli
 QUICK_TRAIN_FOR_TESTS = False
 USE_MIL = True  # if true the batch size of the validation set is set to 1. otherwise it is the full length of the set
 
-n_epochs = 80
+n_epochs = 150
 n_cross_validation_runs = 1
 
 parameters = dict(
     # rand=random_seeds[:n_cross_validation_runs],
-    batch=[32],
-    lr=[1e-4],
+    batch=[2, 16, 32, 64],
+    lr=[5e-4, 1e-4, 5e-5],
     wd=[1e-4],  # weight decay regularization
     lr_decay=[0.975],
     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples will be used
@@ -402,6 +407,8 @@ parameters = dict(
     sigma=[0.05],
     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
     class_weight=[1],  # factor for loss of the positive class to address class imbalance
+    bag_size=[8],
+    n_MIL_Neurons=[32]
 )
 
 transforms = None
@@ -410,11 +417,11 @@ if USE_MIL:
     parameters["batch"] = [1]
 
 # "brogrammers", "resnet18", "resnet50", MIL_brogrammers, Resnet18_MIL, PredictionLevelMIL_mfcc
-MODEL_NAME = "PredictionLevelMIL_mfcc"
+MODEL_NAME = "MIL_brogrammers"
 # logmel_1_channel, 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new,mfccs_3s_breathing_deep
 # mfccs_3s_combined_coughs, logmel_3s_combined_coughs, mfcc_mil_combined_cough, resnet_mil_combined_cough
 DATASET_NAME = "mfcc_mil_combined_cough"
-RUN_COMMENT = f"bag_statistics_linear_combination4"
+RUN_COMMENT = f"featureLevelMIL_variedBagsize_variedNeurons_gatedAttention"
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -441,12 +448,18 @@ for p in get_parameter_combinations(parameters, verbose=True):
         train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
                                           train_augmentation=augmentations, random_seed=random_seed, params=p)
 
+
+        train_set.bag_size = p.bag_size
+        val_set.bag_size = p.bag_size
+
+
+
         train_set.augmentations = get_online_augmentations(p)
         if TRACK_METRICS:
             writer = SummaryWriter(log_dir=f"run/tensorboard_saves/{RUN_NAME}/{p}")
 
         train_loader, eval_loader = get_data_loaders(train_set, val_set, p)
-        my_cnn = get_model(MODEL_NAME, load_from_disc=LOAD_FROM_DISC, verbose=False)
+        my_cnn = get_model(MODEL_NAME, p, load_from_disc=LOAD_FROM_DISC, verbose=False)
 
         optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
         lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
