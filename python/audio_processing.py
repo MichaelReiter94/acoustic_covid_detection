@@ -68,7 +68,8 @@ def contains_only_good_audio(participant_metadata, types_of_recording):
 
     combined_recordings = {
         "combined_coughs": ["cough-heavy", "cough-shallow"],
-        "combined_breaths": ["breathing-deep", "breathing-shallow"]
+        "combined_breaths": ["breathing-deep", "breathing-shallow"],
+        "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"]
     }
 
     if isinstance(types_of_recording, str):
@@ -209,23 +210,24 @@ all_types_of_recording = ["cough-heavy", "cough-shallow", "breathing-deep", "bre
                           "counting-normal", "vowel-a", "vowel-e", "vowel-o"]
 combined_recordings = {
     "combined_coughs": ["cough-heavy", "cough-shallow"],
-    "combined_breaths": ["breathing-deep", "breathing-shallow"]
+    "combined_breaths": ["breathing-deep", "breathing-shallow"],
+    "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"]
 }
 
 audio_parameters = dict(
-    type_of_features="logmel",  # logmel | mfcc
-    n_time_steps=224,  # 259 | 224
-    n_features=224,  # 15 | 224
+    type_of_features="mfcc",  # logmel | mfcc
+    n_time_steps=259,  # 259 | 224
+    n_features=50,  # 15 | 224
     sample_rate=22050,
     n_fft=512 * 16,
-    window_length=512,
-    hop_size=256,
+    window_length=512 * 8,
+    hop_size=512*2,
     fmin=0,
-    fmax=22050 // 2
+    fmax=22050 // 4
 )
 
 if __name__ == "__main__":
-    feature_set = FeatureSet("combined_coughs", audio_parameters)
+    feature_set = FeatureSet("combined_breaths", audio_parameters)
     feature_set.create_participant_objects(augmentations=time_domain_augmentations,
-                                           augmentations_per_label=(1, 4))
-    feature_set.save_to("3s_x1x4")
+                                           augmentations_per_label=(1, 5))
+    feature_set.save_to("12s_FFT4096_fmax5500_50mfccs_x1x5")

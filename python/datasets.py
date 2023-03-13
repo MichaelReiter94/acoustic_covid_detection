@@ -273,7 +273,7 @@ class MultipleInstanceLearningMFCC(CustomDataset):
     def get_input_features(self, idx, for_mix_up=False):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
 
-        input_features = self.z_normalize(input_features)
+        # input_features = self.z_normalize(input_features) TODO uncomment or replace
         if self.augmentations is not None:
             input_features = self.augmentations(input_features)
         # if self.mode == "train":
@@ -326,11 +326,10 @@ class MILResnet(CustomDataset):
         #     input_features = self.transform(input_features)
         # else:
 
-        # TODO this is not a great implementation
-        if not for_mix_up:
-            self.bag_size = np.random.randint(4, 16)
-        if self.mode == "eval":
-            self.bag_size = 8
+        # if not for_mix_up:
+        #     self.bag_size = np.random.randint(4, 16)
+        # if self.mode == "eval":
+        #     self.bag_size = 8
 
         input_features = self.evenly_distributed_cyclic_shifts(input_features, n_output_timesteps=self.n_timesteps)
         input_features = np.expand_dims(input_features, 1)

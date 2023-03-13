@@ -357,8 +357,7 @@ def get_rates_from_confusion_matrix(confusion_mat, verbose=False):
     fpr = round(FP / total_negatives, 4)
     precision = round(TP / (TP + FP), 4)
     if verbose:
-        print(pd.DataFrame(dict(tpr=tpr * 100, fpr=fpr * 100, tnr=tnr * 100, fnr=fnr * 100, precision=precision * 100),
-                           index=[0]))
+        print(pd.DataFrame(dict(tpr=tpr * 100, fpr=fpr * 100, tnr=tnr * 100, fnr=fnr * 100), index=[0]))
     return tpr, fpr, tnr, fnr, precision
 
 

@@ -190,9 +190,12 @@ class BrogrammersMIL(nn.Module):
         print("loading Multiple Instance Learning model based on brogrammers")
 
     def forward(self, x):
-        x = x.squeeze(0)
-        # first dimenstion will be the batch size which will be set to 1. This is why it can be eliminated.
-        # the elements within a bag (dimension 1) will instead be kind of treated as batch size
+        # # first dimenstion will be the batch size which will be set to 1. This is why it can be eliminated.
+        # # the elements within a bag (dimension 1) will instead be kind of treated as batch size
+        # x = x.squeeze(0)
+        batch_size, bag_size = x.shape[0], x.shape[1]
+        feature_size = x.shape[2:]
+        x = x.view(batch_size * bag_size, *feature_size)
 
         x = self.conv_layers(x)
         x = self.linear_layers(x)
@@ -206,11 +209,13 @@ class BrogrammersMIL(nn.Module):
         attentation_coef = self.attention_out(A_V * A_U)  # element wise multiplication
 
         # needed for both MIL mechanisms
-        attentation_coef = torch.transpose(attentation_coef, 1, 0)
+        n_features = x.shape[-1]
+        attentation_coef = attentation_coef.view(batch_size, bag_size, 1)
         attentation_coef = F.softmax(attentation_coef, dim=1)
         ################################################################################################################
+        x_combined_bag = x.view(batch_size, bag_size, n_features) * attentation_coef
+        x_combined_bag = x_combined_bag.mean(dim=1)
 
-        x_combined_bag = torch.mm(attentation_coef, x)
         y_pred = self.output_layer(x_combined_bag)
         # no sigmoid activation because the now used BCELossWithLogits class has the activation function included (
         # which improves numerical stability/precision) Also this class has the possibility to add a weighting to the
@@ -230,35 +235,58 @@ class Resnet18MIL(nn.Module):
         # my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
         n_features = self.resnet.fc.in_features
         n_linear_out = 64
-        self.resnet.fc = nn.Linear(n_features, n_linear_out)
+        self.resnet.fc = nn.Linear(n_features, 1)
 
         self.n_hidden_attention = n_hidden_attention
+        n_bag_statistics = 7
+        #
+        # # regular version of the MIL attention mechanism
+        # self.mil_attention = nn.Sequential(
+        #     nn.Linear(n_bag_statistics, self.n_hidden_attention),
+        #     nn.ReLU(),
+        #     nn.Linear(self.n_hidden_attention, self.n_hidden_attention),
+        #     nn.ReLU(),
+        #     nn.Linear(self.n_hidden_attention, 1),
+        # )
 
+        # gated attention mechanism as seen in Attention-based Deep Multiple Instance Learning by
+        # Maximilian Ilse, Jakub M. Tomczak, Max Welling
         self.attention_V = nn.Sequential(
-            nn.Linear(n_linear_out, self.n_hidden_attention),
+            nn.Linear(n_bag_statistics, self.n_hidden_attention),
             nn.Tanh()
         )
         self.attention_U = nn.Sequential(
-            nn.Linear(n_linear_out, self.n_hidden_attention),
+            nn.Linear(n_bag_statistics, self.n_hidden_attention),
             nn.Sigmoid()
         )
         self.attention_out = nn.Linear(self.n_hidden_attention, 1)
 
-        self.output_layer = nn.Sequential(
-            nn.Linear(in_features=n_linear_out, out_features=1)
-        )
-
     def forward(self, x):
-        x = x.squeeze(0)
-        x = self.resnet(x)
-        A_V = self.attention_V(x)
-        A_U = self.attention_U(x)
-        attentation_coef = self.attention_out(A_V * A_U)  # element wise multiplication
-        attentation_coef = torch.transpose(attentation_coef, 1, 0)
-        attentation_coef = F.softmax(attentation_coef, dim=1)
+        batch_size, bag_size = x.shape[0], x.shape[1]
+        feature_size = x.shape[2:]
+        x = x.view(batch_size * bag_size, *feature_size)
+        y = self.resnet(x)
+        y = y.view(batch_size, bag_size)
 
-        x_combined_bag = torch.mm(attentation_coef, x)
-        y_pred = self.output_layer(x_combined_bag)
+        mu = y.mean(dim=1)
+        diff = y.t() - mu
+        sigma = torch.pow(torch.mean(torch.pow(diff, 2.0), dim=0), 0.5)
+        z_scores = diff / sigma
+        skew = torch.mean(torch.pow(z_scores, 3), dim=0)
+        kurtoses = torch.mean(torch.pow(z_scores, 4), dim=0)
+        median, _ = y.median(dim=1)
+        minimum, _ = y.min(dim=1)
+        maximum, _ = y.max(dim=1)
+        bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses]).t()
+
+        ###################################################     MIL    #################################################
+        # # regular version of the MIL attention mechanism
+        # y_pred = self.mil_attention(bag_statistics)
+        # gated attention mechanism
+        A_V = self.attention_V(bag_statistics)
+        A_U = self.attention_U(bag_statistics)
+        y_pred = self.attention_out(A_V * A_U)  # element wise multiplication
+
         return y_pred
 
 
@@ -301,27 +329,26 @@ class PredLevelMIL(nn.Module):
         self.n_hidden_attention = n_hidden_attention
         n_bag_statistics = 7
 
-        # regular version of the MIL attention mechanism
-        self.mil_attention = nn.Sequential(
-            nn.Linear(n_bag_statistics, self.n_hidden_attention),
-            nn.ReLU(),
-            # nn.Linear(self.n_hidden_attention, self.n_hidden_attention),
-            # nn.ReLU(),
-            nn.Linear(self.n_hidden_attention, 1),
-            # nn.Linear(n_bag_statistics, 1)
-        )
+        # # regular version of the MIL attention mechanism
+        # self.mil_attention = nn.Sequential(
+        #     nn.Linear(n_bag_statistics, self.n_hidden_attention),
+        #     nn.ReLU(),
+        #     # nn.Linear(self.n_hidden_attention, self.n_hidden_attention),
+        #     # nn.ReLU(),
+        #     nn.Linear(self.n_hidden_attention, 1),
+        # )
 
-        # # gated attention mechanism as seen in Attention-based Deep Multiple Instance Learning by
-        # # Maximilian Ilse, Jakub M. Tomczak, Max Welling
-        # self.attention_V = nn.Sequential(
-        #     nn.Linear(n_bag_statistics, self.n_hidden_attention),
-        #     nn.Tanh()
-        # )
-        # self.attention_U = nn.Sequential(
-        #     nn.Linear(n_bag_statistics, self.n_hidden_attention),
-        #     nn.Sigmoid()
-        # )
-        # self.attention_out = nn.Linear(self.n_hidden_attention, 1)
+        # gated attention mechanism as seen in Attention-based Deep Multiple Instance Learning by
+        # Maximilian Ilse, Jakub M. Tomczak, Max Welling
+        self.attention_V = nn.Sequential(
+            nn.Linear(n_bag_statistics, self.n_hidden_attention),
+            nn.Tanh()
+        )
+        self.attention_U = nn.Sequential(
+            nn.Linear(n_bag_statistics, self.n_hidden_attention),
+            nn.Sigmoid()
+        )
+        self.attention_out = nn.Linear(self.n_hidden_attention, 1)
 
 
         print("loading Multiple Instance Learning model based on brogrammers")
@@ -367,11 +394,11 @@ class PredLevelMIL(nn.Module):
         # y_pred = torch.stack([y.max()])
         ###################################################     MIL    #################################################
         # # regular version of the MIL attention mechanism
-        y_pred = self.mil_attention(bag_statistics)
+        # y_pred = self.mil_attention(bag_statistics)
         # gated attention mechanism
-        # A_V = self.attention_V(bag_statistics)
-        # A_U = self.attention_U(bag_statistics)
-        # y_pred = self.attention_out(A_V * A_U)  # element wise multiplication
+        A_V = self.attention_V(bag_statistics)
+        A_U = self.attention_U(bag_statistics)
+        y_pred = self.attention_out(A_V * A_U)  # element wise multiplication
 
         # needed for both MIL mechanisms
         # attentation_coef = torch.transpose(attentation_coef, 1, 0)

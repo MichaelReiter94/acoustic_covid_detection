@@ -23,8 +23,51 @@ import random
 from torch.optim.lr_scheduler import ExponentialLR, ReduceLROnPlateau
 import tkinter as tk
 from tkinter.messagebox import askyesno
+from torch import cuda
 
 dataset_collection = {
+    "combined_breaths_12s_FFT4096_fmax5500_50mfccs":{
+        "dataset_class": MultipleInstanceLearningMFCC,
+        "participants_file": "2023_03_12_mfcc_combined_breaths_12s_FFT4096_fmax5500_50mfccs.pickle",
+        "augmented_files": [".pickle"]
+    },
+
+    "mfcc_vowel_e_6s_FFT2048_fmax5500": {
+        "dataset_class": BrogrammersMFCCDataset,
+        "participants_file": "2023_03_11_mfcc_vowel-e_6s_FFT2048_fmax5500.pickle",
+        "augmented_files": [".pickle"]
+    },
+    "mfcc_vowels_combined_6s_FFT2048_fmax5500": {
+        "dataset_class": MultipleInstanceLearningMFCC,
+        "participants_file": "2023_03_11_mfcc_combined_vowels_6s_FFT2048_fmax5500.pickle",
+        "augmented_files": ["2023_03_11_mfcc_combined_vowels_6s_FFT2048_fmax5500_x1x7augmented.pickle"]
+    },
+    "mfcc_vowel_a_6s_FFT2048_fmax5500": {
+        "dataset_class": BrogrammersMFCCDataset,
+        "participants_file": "2023_03_10_mfcc_vowel-a_6s_FFT2048_fmax5500.pickle",
+        "augmented_files": [".pickle"]
+    },
+    "combined_breaths_6s_2048fft_fmax5500": {
+        "dataset_class": MultipleInstanceLearningMFCC,
+        "participants_file": "2023_03_09_mfcc_combined_breaths_6s_FFT2048_fmax5500.pickle",
+        "augmented_files": ["2023_03_10_mfcc_combined_breaths_6s_FFT2048_fmax5500_x1x5augmented.pickle"]
+    },
+    "combined_breaths_6s_4096fft": {
+        "dataset_class": BrogrammersMFCCDataset,
+        "participants_file": "2023_03_09_mfcc_combined_breaths_6s_FFT4096.pickle",
+        "augmented_files": ["2023_03_09_mfcc_combined_breaths_6s_FFT4096_x1x5augmented.pickle"]
+    },
+    "combined_breaths_6s_2048fft": {
+        "dataset_class": BrogrammersMFCCDataset,
+        "participants_file": "2023_03_08_mfcc_combined_breaths_6s_FFT2048.pickle",
+        "augmented_files": ["2023_03_09_mfcc_combined_breaths_6s_FFT2048_x1x5augmented.pickle"]
+    },
+    "combined_breaths_3s_2048fft": {
+        "dataset_class": MultipleInstanceLearningMFCC,
+        "participants_file": "2023_03_07_mfcc_combined_breaths_3s_long_FFTwindow.pickle",
+        "augmented_files": ["2023_03_07_mfcc_combined_breaths_3s_long_FFTwindow_x1x4augmented.pickle",
+                            "2023_03_08_mfcc_combined_breaths_3s_long_FFTwindow_x1x4_v2augmented.pickle"]
+    },
     "resnet_mil_combined_cough": {
         "dataset_class": MILResnet,
         "participants_file": "2023_02_25_logmel_combined_coughs_3s.pickle",
@@ -43,7 +86,7 @@ dataset_collection = {
     "mfccs_3s_breathing_deep": {
         "dataset_class": BrogrammersMFCCDataset,
         "participants_file": "2023_02_21_mfcc_breathing-deep_3s_22kHz.pickle",
-        "augmented_files": None
+        "augmented_files": ["2023_02_21_mfcc_breathing-deep_3s_22kHz_augmented.pickle"]
     },
     "logmel_3s_combined_coughs": {
         "dataset_class": ResnetLogmelDataset,
@@ -57,9 +100,9 @@ dataset_collection = {
     "mfccs_3s_combined_coughs": {
         "dataset_class": BrogrammersMFCCDataset,
         "participants_file": "2023_02_23_mfcc_combined_coughs_3s.pickle",
-        # "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle",
-        #                     "2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
-        "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
+        "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle",
+                            "2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
+        # "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
     },
     "15_mfccs_highres_new": {
         "dataset_class": BrogrammersMFCCDataset,
@@ -89,8 +132,8 @@ dataset_collection = {
     },
     "logmel_1_channel": {
         "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2022-11-25-added_logmel224x224_no_augmentations.pickle",
-        "augmented_files": ["2022-11-25-added_logmel224x224.pickle"]
+        "participants_file": "2023_02_20_logmel_cough_22kHz_new.pickle",
+        "augmented_files": ["2023_02_21_logmel_cough_22kHz_new_augmented.pickle"]
         # "augmented_files": None
     },
     # "logmel_3_channels_512_2048_8192": {
@@ -112,11 +155,34 @@ dataset_collection = {
     #     # "augmented_files": None
     # }
 }
-device = "cuda" if torch.cuda.is_available() else "cpu"
-TESTING_MODE = not torch.cuda.is_available()
+device = "cuda" if cuda.is_available() else "cpu"
+TESTING_MODE = not cuda.is_available()
 
 
 # <editor-fold desc="function definitions">
+def summarize_cuda_memory_usage(summarize_device=False, detailed=False):
+    if not cuda.is_available():
+        return
+    current_device_idx = cuda.current_device()
+    if summarize_device:
+        print("---------------------------------------------------------------------------------------")
+        device_count = cuda.device_count()
+        device_name = cuda.get_device_name(current_device_idx)
+        # device_properties = cuda.get_device_properties(current_device_idx)
+        print(f"Number of available devices: {device_count}")
+        print("Current Device:")
+        print(device_name)
+        # print(device_properties)
+
+    print("---------------------------------------------------------------------------------------")
+    if detailed:
+        print(cuda.memory_summary(current_device_idx))
+    else:
+        free_mem, total_mem = cuda.mem_get_info(current_device_idx)
+        # convert to gigabyte
+        free_mem =  round(free_mem/(1024**2))
+        total_mem = round(total_mem/(1024**2))
+        print(f"{free_mem} MB / {total_mem} MB are still available")
 
 
 def get_parameter_groups(model, output_lr, input_lr, verbose=True):
@@ -297,18 +363,21 @@ def get_data_loaders(training_set, validation_set, params):
     # many augmented samples will be added to the training data. This adds comparability between runs.
 
     # sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
-    sampler = WeightedRandomSampler(sample_weights, num_samples=500, replacement=True)
+    sampler = WeightedRandomSampler(sample_weights, num_samples=512, replacement=True)
 
     # create dataloaders
+    n_workers = 0
+    if cuda.is_available():
+        n_workers = 0
     if params.weighted_sampler:
-        train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler)
+        train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler,
+                           num_workers=n_workers)
     else:
-        train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True)
+        train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True,
+                           num_workers=n_workers)
 
-    if USE_MIL:
-        val = DataLoader(dataset=validation_set, batch_size=1)
-    else:
-        val = DataLoader(dataset=validation_set, batch_size=len(val_set))
+
+    val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
     return train, val
 
 
@@ -383,45 +452,49 @@ def get_online_augmentations(run_parameters):
 
 # </editor-fold>
 
-random_seeds = [99468865, 123587955, 215674, 3213213211, 55555555,
-                66445511337, 316497938271, 161094, 191919191, 101010107]
+random_seeds = [99468865, 215674, 3213213211, 55555555, 66445511337,
+                316497938271, 161094, 191919191, 101010107, 123587955]
+# random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
+#                 66445511337, 316497938271, 161094, 191919191, 101010107]
+# first seed (123587955) has a very difficult/bad performing validation set
 
+summarize_cuda_memory_usage(summarize_device=True)
 # ###############################################  manual setup  #######################################################
 USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
 QUICK_TRAIN_FOR_TESTS = False
-USE_MIL = True  # if true the batch size of the validation set is set to 1. otherwise it is the full length of the set
 
-n_epochs = 150
+n_epochs = 100
 n_cross_validation_runs = 1
 
 parameters = dict(
     # rand=random_seeds[:n_cross_validation_runs],
-    batch=[2, 16, 32, 64],
-    lr=[5e-4, 1e-4, 5e-5],
+    batch=[64],
+    lr=[5e-4],
     wd=[1e-4],  # weight decay regularization
-    lr_decay=[0.975],
-    mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples will be used
-    mixup_p=[0.5],  # probability of mix up being used at all
-    use_augm_datasets=[True],
+    lr_decay=[.975],
+    mixup_a=[0.4],  # alpha value to decide probability distribution of how much of each of the samples is used
+    mixup_p=[1.0],  # probability of mix up being used at all
+    use_augm_datasets=[False],
     shift=[True],
     sigma=[0.05],
     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
     class_weight=[1],  # factor for loss of the positive class to address class imbalance
     bag_size=[8],
-    n_MIL_Neurons=[32]
+    n_MIL_Neurons=[64]
 )
 
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
-if USE_MIL:
-    parameters["batch"] = [1]
 
 # "brogrammers", "resnet18", "resnet50", MIL_brogrammers, Resnet18_MIL, PredictionLevelMIL_mfcc
-MODEL_NAME = "MIL_brogrammers"
+MODEL_NAME = "Resnet18_MIL"
 # logmel_1_channel, 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new,mfccs_3s_breathing_deep
 # mfccs_3s_combined_coughs, logmel_3s_combined_coughs, mfcc_mil_combined_cough, resnet_mil_combined_cough
-DATASET_NAME = "mfcc_mil_combined_cough"
-RUN_COMMENT = f"featureLevelMIL_variedBagsize_variedNeurons_gatedAttention"
+# combined_breaths_3s_2048fft, combined_breaths_6s_2048fft, combined_breaths_6s_4096fft, combined_breaths_6s_2048fft_fmax5500
+# mfcc_vowel_a_6s_FFT2048_fmax5500, mfcc_vowel_e_6s_FFT2048_fmax5500, mfcc_vowels_combined_6s_FFT2048_fmax5500
+# combined_breaths_12s_FFT4096_fmax5500_50mfccs
+DATASET_NAME = "combined_breaths_12s_FFT4096_fmax5500_50mfccs"
+RUN_COMMENT = f"test"
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -444,14 +517,19 @@ tracker = IntraEpochMetricsTracker(datasets={DATASET_NAME: dataset_collection[DA
 for p in get_parameter_combinations(parameters, verbose=True):
     tracker.setup_run_with_new_params(p)
     for random_seed in random_seeds[:n_cross_validation_runs]:
+        summarize_cuda_memory_usage()
         tracker.start_run_with_random_seed(random_seed)
         train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
                                           train_augmentation=augmentations, random_seed=random_seed, params=p)
 
 
+        train_set.n_channels = 3
+        train_set.n_timesteps = 120
+        val_set.n_channels = 3
+        val_set.n_timesteps = 120
+
         train_set.bag_size = p.bag_size
         val_set.bag_size = p.bag_size
-
 
 
         train_set.augmentations = get_online_augmentations(p)

@@ -24,10 +24,10 @@ separator = "\n#################################################################
 # text = ""
 
 if args.program_start:
-    text = f"Program started: {datetime.now().strftime('%m/%d/%Y, %H:%M h')}"
+    text = f"Program started: {datetime.now().strftime('%d/%m/%Y, %H:%M h')}"
 
 elif args.program_finished:
-    text = f"Program finished: {datetime.now().strftime('%m/%d/%Y, %H:%M h')}"
+    text = f"Program finished: {datetime.now().strftime('%d/%m/%Y, %H:%M h')}"
     # add stdout log file to text/mail
     if args.outputLogFile:
         try:
