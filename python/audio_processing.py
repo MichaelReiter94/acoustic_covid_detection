@@ -215,19 +215,19 @@ combined_recordings = {
 }
 
 audio_parameters = dict(
-    type_of_features="mfcc",  # logmel | mfcc
-    n_time_steps=259,  # 259 | 224
-    n_features=50,  # 15 | 224
+    type_of_features="logmel",  # logmel | mfcc
+    n_time_steps=224,  # 259 | 224
+    n_features=224,  # 15 | 224
     sample_rate=22050,
     n_fft=512 * 16,
-    window_length=512 * 8,
-    hop_size=512*2,
+    window_length=512 * 4,
+    hop_size=1024,
     fmin=0,
-    fmax=22050 // 4
+    fmax=22050 // 2
 )
 
 if __name__ == "__main__":
     feature_set = FeatureSet("combined_breaths", audio_parameters)
-    feature_set.create_participant_objects(augmentations=time_domain_augmentations,
+    feature_set.create_participant_objects(augmentations=None,
                                            augmentations_per_label=(1, 5))
-    feature_set.save_to("12s_FFT4096_fmax5500_50mfccs_x1x5")
+    feature_set.save_to("46ms_FFT2048_fmax11000_224logmel")

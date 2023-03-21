@@ -99,15 +99,46 @@ class BrogrammersSequentialModel(nn.Module):
         return prediction
 
 
-def get_resnet18():
+def get_resnet18(add_dropouts=False):
     TIMESTEPS = 224
     FREQUNCY_BINS = 224
-    N_CHANNELS = 3
+    # N_CHANNELS = 3
+    N_CHANNELS = 1
+
     my_model = resnet18(weights=ResNet18_Weights.DEFAULT)
-    # my_model = resnet18()
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
+
+    # my_model = resnet18()  # not pretrained
     # for param in my_model.parameters():
     #     param.requires_grad = False
+
+    ######################### change number o finput channels from 3 to 1 ################################
+
+    weights = my_model.conv1.weight
+    # weights_single_channel = weights.mean(dim=1).unsqueeze(dim=1)
+    weights_single_color = weights[:, 0, :, :].unsqueeze(dim=1)
+
+    in_channels = 1
+    out_channels = 64
+    my_model.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=7, stride=2, padding=3, bias=False)
+    # my_model.conv1.weight = nn.Parameter(weights_single_channel)
+    my_model.conv1.weight = nn.Parameter(weights_single_color)
+
+    ############################  add dropouts (spatial and regular to resnet  ################################
+    if add_dropouts:
+        my_model.layer1 = nn.Sequential(*my_model.layer1, nn.Dropout2d(p=0.1))
+        my_model.layer2 = nn.Sequential(*my_model.layer2, nn.Dropout2d(p=0.2))
+        my_model.layer3 = nn.Sequential(*my_model.layer3, nn.Dropout2d(p=0.3))
+        my_model.layer4 = nn.Sequential(*my_model.layer4, nn.Dropout2d(p=0.4))
+        my_model.avgpool = nn.Sequential(my_model.avgpool, nn.Dropout(p=0.5))
+
+
+
+
+
+
+
+
     n_features = my_model.fc.in_features
     my_model.fc = nn.Linear(n_features, 1)
     return my_model

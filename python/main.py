@@ -26,10 +26,16 @@ from tkinter.messagebox import askyesno
 from torch import cuda
 
 dataset_collection = {
-    "combined_breaths_12s_FFT4096_fmax5500_50mfccs":{
+    "logmel_combined_breaths_6s_FFT2048_fmax5500_112logmel": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_03_13_logmel_combined_breaths_6s_FFT2048_fmax5500_112logmel.pickle",
+        "augmented_files": ["2023_03_14_logmel_combined_breaths_3s_FFT2048_fmax5500_112logmelaugmented.pickle"]
+    },
+
+    "combined_breaths_12s_FFT4096_fmax5500_50mfccs": {
         "dataset_class": MultipleInstanceLearningMFCC,
         "participants_file": "2023_03_12_mfcc_combined_breaths_12s_FFT4096_fmax5500_50mfccs.pickle",
-        "augmented_files": [".pickle"]
+        "augmented_files": ["2023_03_13_mfcc_combined_breaths_12s_FFT4096_fmax5500_50mfccs_x1x5augmented.pickle"]
     },
 
     "mfcc_vowel_e_6s_FFT2048_fmax5500": {
@@ -95,7 +101,6 @@ dataset_collection = {
                             "2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
         # "augmented_files": ["2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
 
-
     },
     "mfccs_3s_combined_coughs": {
         "dataset_class": BrogrammersMFCCDataset,
@@ -160,6 +165,40 @@ TESTING_MODE = not cuda.is_available()
 
 
 # <editor-fold desc="function definitions">
+
+def get_parameter_groups(model, output_lr, input_lr, weight_decay=1e-4, verbose=True):
+    # applies different learning rates for each (parent) layer in the model (for finetuning a pretrained network).
+    # the inout layer gets the inputlr, the output layer the output_lr. All layers in between get linearly interpolated.
+
+    # works for resnet architecture and assigns a learning rate for each parent layer and the input and output layers
+    # in total there are (for a resnet 18) 61 parameter groups but only 4 parent layers and 3 layers as in/out layers
+    # this means there are only  4+3  different learning rates.
+
+    parent_layer = lambda name: name.split(".")[0]
+    layer_names = [name for name, _ in model.named_parameters()]
+    layer_names.reverse()
+    parent_layers = list(set([parent_layer(layer) for layer in layer_names]))
+    n_parent_layers = len(parent_layers)
+    lr = output_lr
+    last_parent_layer = parent_layer(layer_names[0])
+    if verbose:
+        print(f'0: lr = {lr:.6f}, {last_parent_layer}')
+
+    lr_mult = np.power(input_lr / output_lr, 1 / (n_parent_layers - 1))
+    params = []
+    for idx, layer in enumerate(layer_names):
+        current_parent_layer = parent_layer(layer)
+        if last_parent_layer != (current_parent_layer):
+            lr *= lr_mult
+            if verbose:
+                print(f'{idx}: lr = {lr:.6f}, {current_parent_layer}')
+            last_parent_layer = current_parent_layer
+        params.append({'params': [p for n, p in model.named_parameters() if n == layer and p.requires_grad],
+                       'lr': lr,
+                       'weight_decay': weight_decay})
+    return params
+
+
 def summarize_cuda_memory_usage(summarize_device=False, detailed=False):
     if not cuda.is_available():
         return
@@ -180,41 +219,9 @@ def summarize_cuda_memory_usage(summarize_device=False, detailed=False):
     else:
         free_mem, total_mem = cuda.mem_get_info(current_device_idx)
         # convert to gigabyte
-        free_mem =  round(free_mem/(1024**2))
-        total_mem = round(total_mem/(1024**2))
+        free_mem = round(free_mem / (1024 ** 2))
+        total_mem = round(total_mem / (1024 ** 2))
         print(f"{free_mem} MB / {total_mem} MB are still available")
-
-
-def get_parameter_groups(model, output_lr, input_lr, verbose=True):
-    # applies different learning rates for each (parent) layer in the model (for finetuning a pretrained network). The
-    # inout layer gets the input_lr, the output layer the output_lr. All layers in between get linearly interpolated.
-
-    # works for resnet architecture and assigns a learning rate for each parent layer and the input and output layers
-    # in total there are (for a resnet 18) 61 parameter groups but only 4 parent layers and 3 layers as input/output
-    # layers. this means there are only  4+3  different learning rates.
-
-    parent_layer = lambda name: name.split(".")[0]
-    layer_names = [name for name, _ in model.named_parameters()]
-    layer_names.reverse()
-    parent_layers = list(set([parent_layer(layer) for layer in layer_names]))
-    n_parent_layers = len(parent_layers)
-    lr = output_lr
-    last_parent_layer = parent_layer(layer_names[0])
-    if verbose:
-        print(f'0: lr = {lr:.6f}, {last_parent_layer}')
-
-    lr_mult = np.power(input_lr / output_lr, 1 / (n_parent_layers - 1))
-    parameter_groups = []
-    for idx, layer in enumerate(layer_names):
-        current_parent_layer = parent_layer(layer)
-        if last_parent_layer != current_parent_layer:
-            lr *= lr_mult
-            if verbose:
-                print(f'{idx}: lr = {lr:.6f}, {current_parent_layer}')
-            last_parent_layer = current_parent_layer
-        parameter_groups.append({'params': [p for n, p in model.named_parameters() if n == layer and p.requires_grad],
-                                 'lr': lr})
-    return parameter_groups
 
 
 def get_parameter_combinations(param_dict, verbose=True):
@@ -357,7 +364,6 @@ def get_data_loaders(training_set, validation_set, params):
     # sample_weights = [label_weights[int(label)] for (data, label) in training_set]
     sample_weights = [label_weights[int(label)] for label in training_set.labels]
 
-
     # might actually set num_samples higher because like this not all samples from the dataset are chosen within 1 epoch
     # or fix to "lower" num_sumbples so that we always have the same number of samples within an epoch, no matter how
     # many augmented samples will be added to the training data. This adds comparability between runs.
@@ -376,7 +382,6 @@ def get_data_loaders(training_set, validation_set, params):
         train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True,
                            num_workers=n_workers)
 
-
     val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
     return train, val
 
@@ -393,6 +398,8 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
     }
     if model_name in ["MIL_brogrammers", "Resnet18_MIL", "PredictionLevelMIL_mfcc"]:
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons).to(device)
+    elif model_name == "resnet18":
+        my_model = model_dict[model_name](add_dropouts=p.resnet_dropout).to(device)
     else:
         my_model = model_dict[model_name]().to(device)
 
@@ -416,7 +423,16 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
 
 
 def get_optimizer(model_name, load_from_disc=False):
-    my_optimizer = Adam(my_cnn.parameters(), lr=p.lr, weight_decay=p.wd)
+    # if isinstance(p.lr, tuple):
+    if p.lr_in is None:
+        params = get_parameter_groups(my_cnn, input_lr=p.lr, output_lr=p.lr, weight_decay=p.wd, verbose=True)
+    else:
+        params = get_parameter_groups(my_cnn, input_lr=p.lr_in, output_lr=p.lr, weight_decay=p.wd, verbose=True)
+
+    # else:
+    #     params = get_parameter_groups(my_cnn, input_lr=p.lr, output_lr=p.lr, weight_decay=p.wd, verbose=True)
+    my_optimizer = Adam(params)
+    # my_optimizer = Adam(my_cnn.parameters(), lr=p.lr, weight_decay=p.wd)
     if load_from_disc:
         try:
             path = f"data/Coswara_processed/models/{model_name}/optimizer.pickle"
@@ -463,38 +479,61 @@ summarize_cuda_memory_usage(summarize_device=True)
 USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
 QUICK_TRAIN_FOR_TESTS = False
 
-n_epochs = 100
+n_epochs = 300
 n_cross_validation_runs = 1
+
+# parameters = dict(
+#     # rand=random_seeds[:n_cross_validation_runs],
+#     batch=[64],
+#     lr=[5e-3, 1e-3, 5e-4], # lr of the output layer - the lr between in/output layer are linearly interpolated
+#     wd=[1e-4],  # weight decay regularization
+#     lr_decay=[0.975, 0.99],
+#     mixup_a=[0.4],  # alpha value to decide probability distribution of how much of each of the samples is used
+#     mixup_p=[1.0],  # probability of mix up being used at all
+#     use_augm_datasets=[True],
+#     shift=[True],
+#     sigma=[0.0],
+#     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
+#     class_weight=[1],  # factor for loss of the positive class to address class imbalance
+#     bag_size=[8],
+#     n_MIL_Neurons=[64],
+#     time_steps=[400],
+#     lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
+#     resnet_dropout=[False]
+# )
 
 parameters = dict(
     # rand=random_seeds[:n_cross_validation_runs],
     batch=[64],
-    lr=[5e-4],
+    lr=[8e-4],  # lr of the output layer - the lr between in/output layer are linearly interpolated
     wd=[1e-4],  # weight decay regularization
-    lr_decay=[.975],
+    lr_decay=[0.985],
     mixup_a=[0.4],  # alpha value to decide probability distribution of how much of each of the samples is used
     mixup_p=[1.0],  # probability of mix up being used at all
-    use_augm_datasets=[False],
+    use_augm_datasets=[True],
     shift=[True],
-    sigma=[0.05],
+    sigma=[0.0],
     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
     class_weight=[1],  # factor for loss of the positive class to address class imbalance
     bag_size=[8],
-    n_MIL_Neurons=[64]
+    n_MIL_Neurons=[64],
+    time_steps=[400],
+    lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
+    resnet_dropout=[True, False]
 )
 
 transforms = None
 augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
 
 # "brogrammers", "resnet18", "resnet50", MIL_brogrammers, Resnet18_MIL, PredictionLevelMIL_mfcc
-MODEL_NAME = "Resnet18_MIL"
+MODEL_NAME = "resnet18"
 # logmel_1_channel, 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new,mfccs_3s_breathing_deep
 # mfccs_3s_combined_coughs, logmel_3s_combined_coughs, mfcc_mil_combined_cough, resnet_mil_combined_cough
 # combined_breaths_3s_2048fft, combined_breaths_6s_2048fft, combined_breaths_6s_4096fft, combined_breaths_6s_2048fft_fmax5500
 # mfcc_vowel_a_6s_FFT2048_fmax5500, mfcc_vowel_e_6s_FFT2048_fmax5500, mfcc_vowels_combined_6s_FFT2048_fmax5500
-# combined_breaths_12s_FFT4096_fmax5500_50mfccs
-DATASET_NAME = "combined_breaths_12s_FFT4096_fmax5500_50mfccs"
-RUN_COMMENT = f"test"
+# combined_breaths_12s_FFT4096_fmax5500_50mfccs, logmel_combined_breaths_6s_FFT2048_fmax5500_112logmel
+DATASET_NAME = "logmel_combined_breaths_6s_FFT2048_fmax5500_112logmel"
+RUN_COMMENT = f"onlyRedChannelWeights_"
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -522,15 +561,10 @@ for p in get_parameter_combinations(parameters, verbose=True):
         train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
                                           train_augmentation=augmentations, random_seed=random_seed, params=p)
 
-
-        train_set.n_channels = 3
-        train_set.n_timesteps = 120
-        val_set.n_channels = 3
-        val_set.n_timesteps = 120
-
+        train_set.n_channels, val_set.n_channels = 1, 1
+        train_set.n_timesteps, val_set.n_timesteps = p.time_steps, p.time_steps
         train_set.bag_size = p.bag_size
         val_set.bag_size = p.bag_size
-
 
         train_set.augmentations = get_online_augmentations(p)
         if TRACK_METRICS:
@@ -556,12 +590,10 @@ for p in get_parameter_combinations(parameters, verbose=True):
         # ################################################ training ####################################################
         epoch_start = time.time()
         for epoch in range(n_epochs):
-
             tracker.reset(p, mode="train")
             for i, batch in enumerate(train_loader):
                 train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
             epoch_loss = write_metrics(mode="train")
-
             with torch.no_grad():
                 tracker.reset(p, mode="eval")
                 for i, batch in enumerate(eval_loader):
