@@ -1,4 +1,6 @@
 import smtplib
+from torchvision.ops.focal_loss import sigmoid_focal_loss
+import torch
 
 
 def send_mail(to_address, text, subject="This is no spam"):
@@ -58,6 +60,42 @@ def audiomentations_repr(audiomentation_compose):
         representation[name] = param_string
         # print(f"{name}{params}")
     return representation
+
+
+class FocalLoss:
+    def __init__(self, gamma, alpha=1, reduction: str = "none"):
+        self.gamma = gamma
+        if alpha == 1:
+            self.alpha = -1
+        else:
+            self.alpha = alpha / (alpha + 1)
+        self.reduction = reduction
+        """
+        Loss used in RetinaNet for dense detection: https://arxiv.org/abs/1708.02002. 
+        
+        alpha (float): 
+            Weighting factor to balance positive vs negative examples - negative label gets weighted with factor 1, 
+            the positive labels with the factor alpha. So if you want the model to learn more from the positive 
+            samples than you have to choose alpha > 1 (different to the original implementation of the focal loss but 
+            consistent with BCELossWithLogits implementation of this label weighting) 
+        gamma (float): 
+            Exponent of the modulating factor (1 - p_t) to balance easy vs hard examples. Default: ``2``. 
+        reduction (string): 'none' | 'mean' | 'sum' 
+            'none': No reduction will be applied to the output.
+            'mean': The output will be averaged. 
+            'sum': The output will be summed. Default: 'none'. 
+        Returns: Loss tensor with the reduction applied. 
+        """
+
+    def __call__(self, predictions: torch.Tensor, targets: torch.Tensor):
+        loss = sigmoid_focal_loss(predictions, targets, alpha=self.alpha, gamma=self.gamma, reduction=self.reduction)
+        return loss
+
+    def __str__(self):
+        return str(f"sigmoid_focal_loss(gamma={self.gamma}, alpha={self.alpha})")
+
+    def __repr__(self):
+        return self.__str__()
 
 
 if __name__ == "__main__":

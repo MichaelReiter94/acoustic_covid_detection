@@ -24,6 +24,7 @@ from torch.optim.lr_scheduler import ExponentialLR, ReduceLROnPlateau
 import tkinter as tk
 from tkinter.messagebox import askyesno
 from torch import cuda
+from utils.utils import FocalLoss
 
 dataset_collection = {
     "logmel_combined_breaths_6s_FFT2048_fmax5500_112logmel": {
