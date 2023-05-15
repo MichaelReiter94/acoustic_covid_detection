@@ -63,7 +63,7 @@ from utils.utils import audiomentations_repr
 #         pickle.dump(participants, f)
 
 
-def contains_only_good_audio(participant_metadata, types_of_recording):
+def contains_only_good_audio(participant_metadata, types_of_recording, ID):
     only_good_audio = True
 
     combined_recordings = {
@@ -71,6 +71,15 @@ def contains_only_good_audio(participant_metadata, types_of_recording):
         "combined_breaths": ["breathing-deep", "breathing-shallow"],
         "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"]
     }
+
+    # load the manually identified bad ids and see if this ID has an entry for this recording type. Only combined
+    # recordings are valid so far and only combined breaths has entries so far
+    manually_identified_bad_ids = list(pd.read_excel
+                                       (r"data/Coswara_processed/bad ids from listening and analysis.xlsx",
+                                        sheet_name=types_of_recording, usecols=["ID"]).ID)
+    if ID in manually_identified_bad_ids:
+        return False
+
 
     if isinstance(types_of_recording, str):
             types_of_recording = [types_of_recording]
@@ -83,10 +92,18 @@ def contains_only_good_audio(participant_metadata, types_of_recording):
             # if there is any nan in any of the recordings, it will be dismissed
             combined_recordings = combined_recordings.get(rec_type)
             for combined_rec_type in combined_recordings:
+                # if there is only 1 bad recording, none of it is taken and this participant is disregarded
+                # was different in feature sets before the 1.5.2023
+                # (if 1 had a rating above zero, the participant was taken)
 
-                recording_quality += participant_metadata[f"audio_quality_{combined_rec_type}"].item()
+                recording_quality = participant_metadata[f"audio_quality_{combined_rec_type}"].item()
+                if recording_quality == 0:
+                    return False
         else:
-            recording_quality += participant_metadata[f"audio_quality_{rec_type}"].item()
+            recording_quality = participant_metadata[f"audio_quality_{rec_type}"].item()
+
+
+
         if recording_quality > 0:
             pass
         else:
@@ -139,7 +156,7 @@ class FeatureSet:
         for ID in tqdm(participant_ids):
             participant_metadata = metadata[metadata["user_id"] == ID]
 
-            audio_quailty_is_good_enough = contains_only_good_audio(participant_metadata, self.types_of_recording)
+            audio_quailty_is_good_enough = contains_only_good_audio(participant_metadata, self.types_of_recording, ID)
             if audio_quailty_is_good_enough:
                 try:
                     label = int(participant_metadata.covid_label)
@@ -213,21 +230,22 @@ combined_recordings = {
     "combined_breaths": ["breathing-deep", "breathing-shallow"],
     "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"]
 }
-
+# for fs=22kHz: 256 samples ~= 11ms, 512 samples ~= 23ms,
+# 1024 samples ~= 46ms, 1024 samples ~= 46ms , 2048 samples ~= 92ms
 audio_parameters = dict(
     type_of_features="logmel",  # logmel | mfcc
     n_time_steps=224,  # 259 | 224
     n_features=224,  # 15 | 224
     sample_rate=22050,
     n_fft=512 * 16,
-    window_length=512 * 4,
-    hop_size=1024,
+    window_length=2048*2,
+    hop_size=2048,
     fmin=0,
     fmax=22050 // 2
 )
 
 if __name__ == "__main__":
     feature_set = FeatureSet("combined_breaths", audio_parameters)
-    feature_set.create_participant_objects(augmentations=None,
-                                           augmentations_per_label=(1, 5))
-    feature_set.save_to("46ms_FFT2048_fmax11000_224logmel")
+    feature_set.create_participant_objects(augmentations=time_domain_augmentations,
+                                           augmentations_per_label=(1, 7))
+    feature_set.save_to("NEW_92msHop_184msFFT_fmax11000_224logmel")

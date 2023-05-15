@@ -1,4 +1,5 @@
-from utils import send_mail
+# from utils import send_mail
+from utils.utils import send_mail
 import argparse
 from datetime import datetime
 

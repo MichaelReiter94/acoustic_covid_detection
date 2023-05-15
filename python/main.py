@@ -3,7 +3,7 @@ from audio_processing import FeatureSet
 from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50, BrogrammersMIL, \
     Resnet18MIL, PredLevelMIL
 from evaluation_and_tracking import IntraEpochMetricsTracker
-from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift
+from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift, TransferFunctionSim, RandomGain
 from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, MultipleInstanceLearningMFCC, MILResnet
 from datetime import datetime
 import time
@@ -27,25 +27,59 @@ from torch import cuda
 from utils.utils import FocalLoss
 
 dataset_collection = {
-    "logmel_combined_breaths_6s_FFT2048_fmax5500_112logmel": {
+    "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_03_13_logmel_combined_breaths_6s_FFT2048_fmax5500_112logmel.pickle",
+        "participants_file": "2023_05_11_logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel.pickle",
+        "augmented_files": []
+    },
+    "logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_05_11_logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel.pickle",
+        "augmented_files": []
+    },
+    "logmel_combined_breaths_NEW_06msHop_46msFFT_fmax11000_224logmel": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_05_04_logmel_combined_breaths_NEW_6msHop_46msFFT_fmax11000_224logmel.pickle",
+        "augmented_files": []
+    },
+    "logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_05_04_logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel.pickle",
+        "augmented_files": []
+    },
+    "logmel_combined_breaths_NEW_11msHop_92msFFT_fmax11000_224logmel": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_05_04_logmel_combined_breaths_NEW_11msHop_92msFFT_fmax11000_224logmel.pickle",
+        "augmented_files": []
+    },
+    "logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel": {
+            "dataset_class": ResnetLogmelDataset,
+            "participants_file": "2023_05_02_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
+            "augmented_files": []
+        },
+    "logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_05_02_logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel.pickle",
+        "augmented_files": []
+    },
+    "logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_03_13_logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel.pickle",
         "augmented_files": ["2023_03_14_logmel_combined_breaths_3s_FFT2048_fmax5500_112logmelaugmented.pickle"]
     },
 
     "combined_breaths_12s_FFT4096_fmax5500_50mfccs": {
-        "dataset_class": MultipleInstanceLearningMFCC,
+        "dataset_class": BrogrammersMFCCDataset,
         "participants_file": "2023_03_12_mfcc_combined_breaths_12s_FFT4096_fmax5500_50mfccs.pickle",
         "augmented_files": ["2023_03_13_mfcc_combined_breaths_12s_FFT4096_fmax5500_50mfccs_x1x5augmented.pickle"]
     },
-
     "mfcc_vowel_e_6s_FFT2048_fmax5500": {
         "dataset_class": BrogrammersMFCCDataset,
         "participants_file": "2023_03_11_mfcc_vowel-e_6s_FFT2048_fmax5500.pickle",
         "augmented_files": [".pickle"]
     },
     "mfcc_vowels_combined_6s_FFT2048_fmax5500": {
-        "dataset_class": MultipleInstanceLearningMFCC,
+        "dataset_class": BrogrammersMFCCDataset,
         "participants_file": "2023_03_11_mfcc_combined_vowels_6s_FFT2048_fmax5500.pickle",
         "augmented_files": ["2023_03_11_mfcc_combined_vowels_6s_FFT2048_fmax5500_x1x7augmented.pickle"]
     },
@@ -54,36 +88,16 @@ dataset_collection = {
         "participants_file": "2023_03_10_mfcc_vowel-a_6s_FFT2048_fmax5500.pickle",
         "augmented_files": [".pickle"]
     },
-    "combined_breaths_6s_2048fft_fmax5500": {
-        "dataset_class": MultipleInstanceLearningMFCC,
-        "participants_file": "2023_03_09_mfcc_combined_breaths_6s_FFT2048_fmax5500.pickle",
-        "augmented_files": ["2023_03_10_mfcc_combined_breaths_6s_FFT2048_fmax5500_x1x5augmented.pickle"]
-    },
-    "combined_breaths_6s_4096fft": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_03_09_mfcc_combined_breaths_6s_FFT4096.pickle",
-        "augmented_files": ["2023_03_09_mfcc_combined_breaths_6s_FFT4096_x1x5augmented.pickle"]
-    },
-    "combined_breaths_6s_2048fft": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_03_08_mfcc_combined_breaths_6s_FFT2048.pickle",
-        "augmented_files": ["2023_03_09_mfcc_combined_breaths_6s_FFT2048_x1x5augmented.pickle"]
-    },
-    "combined_breaths_3s_2048fft": {
-        "dataset_class": MultipleInstanceLearningMFCC,
-        "participants_file": "2023_03_07_mfcc_combined_breaths_3s_long_FFTwindow.pickle",
-        "augmented_files": ["2023_03_07_mfcc_combined_breaths_3s_long_FFTwindow_x1x4augmented.pickle",
-                            "2023_03_08_mfcc_combined_breaths_3s_long_FFTwindow_x1x4_v2augmented.pickle"]
-    },
+
     "resnet_mil_combined_cough": {
-        "dataset_class": MILResnet,
+        "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_02_25_logmel_combined_coughs_3s.pickle",
         # "augmented_files":  ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle"]
         "augmented_files": ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle",
                             "2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
     },
     "mfcc_mil_combined_cough": {
-        "dataset_class": MultipleInstanceLearningMFCC,
+        "dataset_class": BrogrammersMFCCDataset,
         "participants_file": "2023_02_23_mfcc_combined_coughs_3s.pickle",
         # "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
         # "augmented_files": ["2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
@@ -319,6 +333,10 @@ def load_train_val_and_test_set_ids_from_disc(rand_seed, split_ratio):
 def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentation=None, random_seed=None, params=None):
     dataset_dict = dataset_collection[dataset_name]
     DatasetClass = dataset_dict["dataset_class"]
+    if DatasetClass.__name__ == ResnetLogmelDataset.__name__ and USE_MIL:
+        DatasetClass = MILResnet
+    elif DatasetClass.__name__ == BrogrammersMFCCDataset.__name__ and USE_MIL:
+        DatasetClass = MultipleInstanceLearningMFCC
 
     if USE_TRAIN_VAL_TEST_SPLIT:
         train_ids, validation_ids, test_ids = load_train_val_and_test_set_ids_from_disc(rand_seed=random_seed,
@@ -344,9 +362,10 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
 
     training_set = DatasetClass(user_ids=train_ids, original_files=dataset_dict["participants_file"],
                                 transform=transform, augmented_files=augmented_datasets,
-                                augmentations=train_augmentation, verbose=VERBOSE, mode="train")
+                                augmentations=train_augmentation, verbose=VERBOSE, mode="train",
+                                min_audio_quality=p.min_quality)
     validation_set = DatasetClass(user_ids=validation_ids, original_files=dataset_dict["participants_file"],
-                                  transform=transform, verbose=VERBOSE, mode="eval")
+                                  transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=p.min_quality)
 
     training_set.mix_up_alpha = params.mixup_a
     training_set.mix_up_probability = params.mixup_p
@@ -370,10 +389,10 @@ def get_data_loaders(training_set, validation_set, params):
     # many augmented samples will be added to the training data. This adds comparability between runs.
 
     # sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
-    sampler = WeightedRandomSampler(sample_weights, num_samples=512, replacement=True)
+    sampler = WeightedRandomSampler(sample_weights, num_samples=SAMPLES_PER_EPOCH, replacement=True)
 
     # create dataloaders
-    n_workers = 0
+    n_workers = 1
     if cuda.is_available():
         n_workers = 0
     if params.weighted_sampler:
@@ -397,10 +416,15 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
         "Resnet18_MIL": Resnet18MIL,
         "PredictionLevelMIL_mfcc": PredLevelMIL
     }
-    if model_name in ["MIL_brogrammers", "Resnet18_MIL", "PredictionLevelMIL_mfcc"]:
+    if model_name in ["MIL_brogrammers", "PredictionLevelMIL_mfcc"]:
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons).to(device)
+    elif model_name == "Resnet18_MIL":
+        _, _, F, T = train_set.get_input_shape()
+        my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons, add_dropouts=p.resnet_dropout,
+                                          F=F, T=T).to(device)
     elif model_name == "resnet18":
-        my_model = model_dict[model_name](add_dropouts=p.resnet_dropout).to(device)
+        _, F, T = train_set.get_input_shape()
+        my_model = model_dict[model_name](add_dropouts=p.resnet_dropout, FREQUNCY_BINS=F, TIMESTEPS=T).to(device)
     else:
         my_model = model_dict[model_name]().to(device)
 
@@ -446,24 +470,27 @@ def get_optimizer(model_name, load_from_disc=False):
 
 def write_metrics(mode):
     metrics = tracker.get_epoch_metrics()
-    if TRACK_METRICS:
-        writer.add_scalar(f"01_loss/{mode}", metrics["loss"], epoch)
-        writer.add_scalar(f"02_accuracy/{mode}", metrics["accuracy"], epoch)
-        writer.add_scalar(f"03_AUC-ROC/{mode}", metrics["auc_roc"], epoch)
-        writer.add_scalar(f"04_f1_score/{mode}", metrics["f1_score"], epoch)
-        writer.add_scalar(f"05_AUC-precision-recall/{mode}", metrics["auc_prec_recall"], epoch)
-        writer.add_scalar(f"06_TPR_or_Recall_or_Sensitivity/{mode}", metrics["tpr"], epoch)
-        writer.add_scalar(f"07_TrueNegativeRate_or_Specificity/{mode}", metrics["tnr"], epoch)
-        writer.add_scalar(f"08_Precision_or_PositivePredictiveValue/{mode}", metrics["precision"], epoch)
-        writer.add_scalar(f"09_true_positives_at_95/{mode}", metrics["tpr_at_95"], epoch)
+    # if TRACK_METRICS:
+    #     writer.add_scalar(f"01_loss/{mode}", metrics["loss"], epoch)
+    #     writer.add_scalar(f"02_accuracy/{mode}", metrics["accuracy"], epoch)
+    #     writer.add_scalar(f"03_AUC-ROC/{mode}", metrics["auc_roc"], epoch)
+    #     writer.add_scalar(f"04_f1_score/{mode}", metrics["f1_score"], epoch)
+    #     writer.add_scalar(f"05_AUC-precision-recall/{mode}", metrics["auc_prec_recall"], epoch)
+    #     writer.add_scalar(f"06_TPR_or_Recall_or_Sensitivity/{mode}", metrics["tpr"], epoch)
+    #     writer.add_scalar(f"07_TrueNegativeRate_or_Specificity/{mode}", metrics["tnr"], epoch)
+    #     writer.add_scalar(f"08_Precision_or_PositivePredictiveValue/{mode}", metrics["precision"], epoch)
+    #     writer.add_scalar(f"09_true_positives_at_95/{mode}", metrics["tpr_at_95"], epoch)
     return metrics["loss"]
 
 
 def get_online_augmentations(run_parameters):
     if run_parameters.shift:
-        augmentation = Compose([AddGaussianNoise(0, run_parameters.sigma), CyclicTemporalShift()])
+        augmentation = Compose([AddGaussianNoise(0, run_parameters.sigma),
+                                CyclicTemporalShift(),
+                                TransferFunctionSim(),
+                                RandomGain()])
     else:
-        augmentation = Compose([AddGaussianNoise(0, run_parameters.sigma)])
+        augmentation = Compose([AddGaussianNoise(0, run_parameters.sigma), TransferFunctionSim(), RandomGain()])
     return augmentation
 
 
@@ -475,152 +502,190 @@ random_seeds = [99468865, 215674, 3213213211, 55555555, 66445511337,
 #                 66445511337, 316497938271, 161094, 191919191, 101010107]
 # first seed (123587955) has a very difficult/bad performing validation set
 
-summarize_cuda_memory_usage(summarize_device=True)
-# ###############################################  manual setup  #######################################################
-USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
-QUICK_TRAIN_FOR_TESTS = False
+if __name__ == "__main__":
+    summarize_cuda_memory_usage(summarize_device=True)
+    # ###############################################  manual setup  ###################################################
+    USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
+    QUICK_TRAIN_FOR_TESTS = False
+    USE_MIL = True
+    SAMPLES_PER_EPOCH = 512
 
-n_epochs = 300
-n_cross_validation_runs = 1
+    n_epochs = 200
+    n_cross_validation_runs = 1
 
-# parameters = dict(
-#     # rand=random_seeds[:n_cross_validation_runs],
-#     batch=[64],
-#     lr=[5e-3, 1e-3, 5e-4], # lr of the output layer - the lr between in/output layer are linearly interpolated
-#     wd=[1e-4],  # weight decay regularization
-#     lr_decay=[0.975, 0.99],
-#     mixup_a=[0.4],  # alpha value to decide probability distribution of how much of each of the samples is used
-#     mixup_p=[1.0],  # probability of mix up being used at all
-#     use_augm_datasets=[True],
-#     shift=[True],
-#     sigma=[0.0],
-#     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
-#     class_weight=[1],  # factor for loss of the positive class to address class imbalance
-#     bag_size=[8],
-#     n_MIL_Neurons=[64],
-#     time_steps=[400],
-#     lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
-#     resnet_dropout=[False]
-# )
+    # parameters = dict(
+    #     # rand=random_seeds[:n_cross_validation_runs],
+    #     batch=[64],
+    #     lr=[8e-4, 5e-4, 1e-4, 8e-3],  # lr of the output layer - the lr between in/output layer are linearly interpolated
+    #     wd=[1e-4],  # weight decay regularization
+    #     lr_decay=[0.985],
+    #     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
+    #     mixup_p=[0.8],  # probability of mix up being used at all
+    #     use_augm_datasets=[False],
+    #     shift=[True],
+    #     sigma=[0.2],
+    #     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
+    #     class_weight=[1],  # factor for loss of the positive class to address class imbalance
+    #     bag_size=[8],
+    #     n_MIL_Neurons=[64],
+    #     time_steps=[100, 200, 400],
+    #     lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
+    #     resnet_dropout=[False, True],
+    #     focal_loss=[0],
+    #     # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
+    #     # If you go below, it learns more from well classified examples and comparably ignores more badly classified ones
+    #     min_quality=[1]
+    #     # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
+    #     # quality "0" is usually already removed when creating the feature set to save memory
+    # )
 
-parameters = dict(
-    # rand=random_seeds[:n_cross_validation_runs],
-    batch=[64],
-    lr=[8e-4],  # lr of the output layer - the lr between in/output layer are linearly interpolated
-    wd=[1e-4],  # weight decay regularization
-    lr_decay=[0.985],
-    mixup_a=[0.4],  # alpha value to decide probability distribution of how much of each of the samples is used
-    mixup_p=[1.0],  # probability of mix up being used at all
-    use_augm_datasets=[True],
-    shift=[True],
-    sigma=[0.0],
-    weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
-    class_weight=[1],  # factor for loss of the positive class to address class imbalance
-    bag_size=[8],
-    n_MIL_Neurons=[64],
-    time_steps=[400],
-    lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
-    resnet_dropout=[True, False]
-)
+    parameters = dict(
+        # rand=random_seeds[:n_cross_validation_runs],
+        batch=[16],
+        lr=[3e-3],  # lr of the output layer - the lr between in/output layer are linearly interpolated
+        wd=[1e-4],  # weight decay regularization
+        lr_decay=[0.97],
+        mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
+        mixup_p=[0.8],  # probability of mix up being used at all
+        use_augm_datasets=[False],
+        shift=[True],
+        sigma=[0.1],
+        weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
+        class_weight=[1],  # factor for loss of the positive class to address class imbalance
+        bag_size=[6],
+        n_MIL_Neurons=[64],
+        time_steps=[112],
+        lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
+        resnet_dropout=[True],
+        focal_loss=[0],
+        # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
+        # If you go below,it learns more from well classified examples and comparably ignores more badly classified ones
+        min_quality=[1]
+        # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
+        # quality "0" is usually already removed when creating the feature set to save memory
 
-transforms = None
-augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift()])
+    )
 
-# "brogrammers", "resnet18", "resnet50", MIL_brogrammers, Resnet18_MIL, PredictionLevelMIL_mfcc
-MODEL_NAME = "resnet18"
-# logmel_1_channel, 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new,mfccs_3s_breathing_deep
-# mfccs_3s_combined_coughs, logmel_3s_combined_coughs, mfcc_mil_combined_cough, resnet_mil_combined_cough
-# combined_breaths_3s_2048fft, combined_breaths_6s_2048fft, combined_breaths_6s_4096fft, combined_breaths_6s_2048fft_fmax5500
-# mfcc_vowel_a_6s_FFT2048_fmax5500, mfcc_vowel_e_6s_FFT2048_fmax5500, mfcc_vowels_combined_6s_FFT2048_fmax5500
-# combined_breaths_12s_FFT4096_fmax5500_50mfccs, logmel_combined_breaths_6s_FFT2048_fmax5500_112logmel
-DATASET_NAME = "logmel_combined_breaths_6s_FFT2048_fmax5500_112logmel"
-RUN_COMMENT = f"onlyRedChannelWeights_"
+    transforms = None
+    augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift(), TransferFunctionSim()])
 
-print(f"Dataset used: {DATASET_NAME}")
-print(f"model used: {MODEL_NAME}")
-date = datetime.today().strftime("%Y-%m-%d")
-RUN_NAME = f"{date}_{MODEL_NAME}_{DATASET_NAME}_{RUN_COMMENT}"
-VERBOSE = True
-LOAD_FROM_DISC = False
-SAVE_TO_DISC = False
+    # "brogrammers", "resnet18", "resnet50", MIL_brogrammers, Resnet18_MIL, PredictionLevelMIL_mfcc
+    MODEL_NAME = "resnet18"
+    if MODEL_NAME == "resnet18" and USE_MIL:
+        MODEL_NAME = "Resnet18_MIL"
+    elif MODEL_NAME == "brogrammers" and USE_MIL:
+        MODEL_NAME = "MIL_brogrammers"
+    # logmel_1_channel, 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new,mfccs_3s_breathing_deep
+    # mfccs_3s_combined_coughs, logmel_3s_combined_coughs, mfcc_mil_combined_cough, resnet_mil_combined_cough
+    # mfcc_vowel_a_6s_FFT2048_fmax5500, mfcc_vowel_e_6s_FFT2048_fmax5500, mfcc_vowels_combined_6s_FFT2048_fmax5500
 
-if device == "cpu":
-    window = tk.Tk()
-    TRACK_METRICS = askyesno(title='Tracking Settings',
-                             message=f'Do you want to track this run?\nIt will be saved as: {RUN_NAME}')
-    window.destroy()
-else:
-    TRACK_METRICS = True
+    # logmel_combined_breaths_NEW_06msHop_46msFFT_fmax11000_224logmel
+    # logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel
+    # logmel_combined_breaths_NEW_11msHop_92msFFT_fmax11000_224logmel
+    # logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel
+    # logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel
+    # logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel
+    # logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel
+    # logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel
+    DATASET_NAME = "logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel"
+    RUN_COMMENT = f"baseline_hyperparams"
 
-# ############################################ setup ###################################################################
-tracker = IntraEpochMetricsTracker(datasets={DATASET_NAME: dataset_collection[DATASET_NAME]}, verbose=TESTING_MODE)
-for p in get_parameter_combinations(parameters, verbose=True):
-    tracker.setup_run_with_new_params(p)
-    for random_seed in random_seeds[:n_cross_validation_runs]:
-        summarize_cuda_memory_usage()
-        tracker.start_run_with_random_seed(random_seed)
-        train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
-                                          train_augmentation=augmentations, random_seed=random_seed, params=p)
+    print(f"Dataset used: {DATASET_NAME}")
+    print(f"model used: {MODEL_NAME}")
+    date = datetime.today().strftime("%Y-%m-%d")
+    RUN_NAME = f"{date}_{MODEL_NAME}_{DATASET_NAME}_{RUN_COMMENT}"
+    VERBOSE = True
+    LOAD_FROM_DISC = False
+    SAVE_TO_DISC = False
 
-        train_set.n_channels, val_set.n_channels = 1, 1
-        train_set.n_timesteps, val_set.n_timesteps = p.time_steps, p.time_steps
-        train_set.bag_size = p.bag_size
-        val_set.bag_size = p.bag_size
+    if device == "cpu":
+        window = tk.Tk()
+        TRACK_METRICS = askyesno(title='Tracking Settings',
+                                 message=f'Do you want to track this run?\nIt will be saved as: {RUN_NAME}')
+        window.destroy()
+    else:
+        TRACK_METRICS = True
 
-        train_set.augmentations = get_online_augmentations(p)
+    # ############################################ setup ###############################################################
+    tracker = IntraEpochMetricsTracker(datasets={DATASET_NAME: dataset_collection[DATASET_NAME]}, verbose=TESTING_MODE)
+    for p in get_parameter_combinations(parameters, verbose=True):
+        tracker.setup_run_with_new_params(p)
+        for random_seed in random_seeds[:n_cross_validation_runs]:
+            summarize_cuda_memory_usage()
+            tracker.start_run_with_random_seed(random_seed)
+            train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
+                                              train_augmentation=augmentations, random_seed=random_seed, params=p)
+
+            train_set.n_channels, val_set.n_channels = 1, 1
+            train_set.n_timesteps, val_set.n_timesteps = p.time_steps, p.time_steps
+            train_set.bag_size = p.bag_size
+            val_set.bag_size = p.bag_size
+
+            train_set.augmentations = get_online_augmentations(p)
+            # if TRACK_METRICS:
+            #     writer = SummaryWriter(log_dir=f"run/tensorboard_saves/{RUN_NAME}/{p}")
+
+            train_loader, eval_loader = get_data_loaders(train_set, val_set, p)
+            my_cnn = get_model(MODEL_NAME, p, load_from_disc=LOAD_FROM_DISC, verbose=False)
+
+            optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
+            lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
+            # lr_scheduler = ReduceLROnPlateau(optimizer, patience=10, verbose=False,
+            #                                  factor=0.2, mode='min', threshold=0.001)
+            loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight]), reduction='mean').to(device)
+            # loss_func = FocalLoss(gamma=p.focal_loss, pos_weight=p.class_weight, reduction='mean',
+            #                       exclude_outliers=1).to(device)
+            # loss_func = nn.BCEWithLogitsLoss().to(device)
+            tracker.save_model_and_training_parameters(my_cnn, optimizer, loss_func)
+            tracker.types_of_recording = train_set.types_of_recording
+            tracker.audio_processing_params = train_set.audio_proc_params
+            tracker.augmentations = train_set.predetermined_augmentations
+            tracker.augmentations_per_label = train_set.augmentations_per_label
+            tracker.train_set_label_counts = f"label '0': {train_set.label_counts()[1][0]}  -  " \
+                                             f"label '1': {train_set.label_counts()[1][1]}"
+
+            # , train_set.audio_proc_params, train_set.predetermined_augmentations
+            # ################################################ training ################################################
+            epoch_start = time.time()
+            for epoch in range(n_epochs):
+                tracker.reset(p, mode="train")
+                for i, batch in enumerate(train_loader):
+                    train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
+                epoch_loss_train = write_metrics(mode="train")
+                with torch.no_grad():
+                    tracker.reset(p, mode="eval")
+                    for i, batch in enumerate(eval_loader):
+                        evaluate_batch(my_cnn, batch, loss_func, tracker)
+                    epoch_loss_val = write_metrics(mode="eval")
+                if isinstance(lr_scheduler, ReduceLROnPlateau):
+                    lr_scheduler.step(epoch_loss_train)
+                    # print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
+                    #       f" --> {round(lr_scheduler._last_lr[-1], 8)}")
+                    # print(optimizer.param_groups[0]['lr'])
+                else:
+                    lr_scheduler.step()
+                    # print(f"current learning rates: {[round(lr, 8) for lr in lr_scheduler.get_last_lr()]}")
+                    # print(f"current learning rates: {round(lr_scheduler.get_last_lr()[0], 8)} "
+                    #       f" --> {round(lr_scheduler.get_last_lr()[-1], 8)}")
+                if TESTING_MODE:
+                    print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
+                          f" --> {round(lr_scheduler._last_lr[-1], 8)}")
+            # ##########################################################################################################
+            if VERBOSE:
+                delta_t = time.time() - epoch_start
+                print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
+
         if TRACK_METRICS:
-            writer = SummaryWriter(log_dir=f"run/tensorboard_saves/{RUN_NAME}/{p}")
+            with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
+                pickle.dump(tracker, f)
 
-        train_loader, eval_loader = get_data_loaders(train_set, val_set, p)
-        my_cnn = get_model(MODEL_NAME, p, load_from_disc=LOAD_FROM_DISC, verbose=False)
+    # if TRACK_METRICS:
+    #     writer.close()
 
-        optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
-        lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
-        # lr_scheduler = ReduceLROnPlateau(optimizer, patience=5, verbose=True, factor=0.1)
-        loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight])).to(device)
-        # loss_func = nn.BCEWithLogitsLoss().to(device)
-        tracker.save_model_and_training_parameters(my_cnn, optimizer, loss_func)
-        tracker.types_of_recording = train_set.types_of_recording
-        tracker.audio_processing_params = train_set.audio_proc_params
-        tracker.augmentations = train_set.predetermined_augmentations
-        tracker.augmentations_per_label = train_set.augmentations_per_label
-        tracker.train_set_label_counts = f"label '0': {train_set.label_counts()[1][0]}  -  " \
-                                         f"label '1': {train_set.label_counts()[1][1]}"
-
-        # , train_set.audio_proc_params, train_set.predetermined_augmentations
-        # ################################################ training ####################################################
-        epoch_start = time.time()
-        for epoch in range(n_epochs):
-            tracker.reset(p, mode="train")
-            for i, batch in enumerate(train_loader):
-                train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
-            epoch_loss = write_metrics(mode="train")
-            with torch.no_grad():
-                tracker.reset(p, mode="eval")
-                for i, batch in enumerate(eval_loader):
-                    evaluate_batch(my_cnn, batch, loss_func, tracker)
-                epoch_loss = write_metrics(mode="eval")
-            lr_scheduler.step()
-            # lr_scheduler.step(epoch_loss)
-
-            if TESTING_MODE:
-                print(f"current learning rates: {[round(lr, 8) for lr in lr_scheduler.get_last_lr()]}")
-        # ##############################################################################################################
-        if VERBOSE:
-            delta_t = time.time() - epoch_start
-            print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
-
-    if TRACK_METRICS:
-        with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
-            pickle.dump(tracker, f)
-
-if TRACK_METRICS:
-    writer.close()
-
-if SAVE_TO_DISC:
-    print("saving new model!")
-    MODEL_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/model.pth"
-    torch.save(my_cnn.state_dict(), MODEL_PATH)
-    # optimizer.zero_grad()
-    OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
-    torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
+    if SAVE_TO_DISC:
+        print("saving new model!")
+        MODEL_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/model.pth"
+        torch.save(my_cnn.state_dict(), MODEL_PATH)
+        # optimizer.zero_grad()
+        OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
+        torch.save(optimizer.state_dict(), OPTIMIZER_PATH)

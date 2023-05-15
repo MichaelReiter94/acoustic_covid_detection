@@ -264,8 +264,9 @@ class CrossValRuns:
         # note, that neither mean nor std of the cross validation is calculated from smoothed curves of the folds, but
         # it is rather smoothed AFTER calculations. This results usually (always?) in a higher std
         if color is None:
-            color  = self.color
+            color = self.color
         if name is None:
+            # name = str(self.parameters)
             name = str(self.parameters)
         mean_curve = self.mean_run.get_metric(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing)
         std = self.std_cross_val.get_metric(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing)
@@ -391,7 +392,6 @@ class IntraEpochMetricsTracker:
         self.augmentations_per_label = None
         self.train_set_label_counts = None
         self.types_of_recording = None
-
 
     def get_data_and_model_params(self, dataset_and_model=True, audio_processing=True, augmentations=True):
         for i in range(max(len(self.augmentations), 1)):
@@ -557,7 +557,10 @@ class IntraEpochMetricsTracker:
         confusion_mat = get_confusion_matrix_parameters(self.labels, self.predictions, verbose=self.verbose)
         tpr, fpr, tnr, fnr, precision = get_rates_from_confusion_matrix(confusion_mat, verbose=self.verbose)
         recall = tpr
-        f1_score = 2 * (precision * recall) / (precision + recall)
+        try:
+            f1_score = 2 * (precision * recall) / (precision + recall)
+        except ValueError:
+            f1_score = 0.0
         metric_dict = dict(
             auc_roc=self.get_aucroc(),
             loss=np.mean(self.loss),
@@ -576,9 +579,9 @@ class IntraEpochMetricsTracker:
         if self.verbose:
             print(f"Epoch:     {len(self.current_run.metrics['train']['loss'])}")
             print(f"Loss:      {round(metric_dict['loss'], 3)}")
-            print(f"AUC ROC:   {round(metric_dict['auc_roc']*100, 1)}%")
-            print(f"Accuracy:  {round(metric_dict['accuracy']*100, 1)}%")
-            print(f"F1-score:  {round(metric_dict['f1_score']*100, 1)}%")
+            print(f"AUC ROC:   {round(metric_dict['auc_roc'] * 100, 1)}%")
+            print(f"Accuracy:  {round(metric_dict['accuracy'] * 100, 1)}%")
+            print(f"F1-score:  {round(metric_dict['f1_score'] * 100, 1)}%")
 
         return metric_dict
 
@@ -586,27 +589,38 @@ class IntraEpochMetricsTracker:
         # using mixup, the resulting labels are no longer binary but continous between 0 and 1
         # we round to get any kind of result but for the training data, the auc-roc is not quite meaningful
         labels = np.round(self.labels)
-        fpr, tpr, thresh = roc_curve(labels, self.predictions)
-        aucroc = auc(fpr, tpr)
+        try:
+            fpr, tpr, thresh = roc_curve(labels, self.predictions)
+            aucroc = auc(fpr, tpr)
+        except ValueError:
+            # fpr, tpr, thresh = 0, 0, 0
+            aucroc = 0.0
         return aucroc
 
     def get_auc_precision_recall(self):
         # using mixup, the resulting labels are no longer binary but continous between 0 and 1
         # we round to get any kind of result but for the training data, the auc-roc is not quite meaningful
         labels = np.round(self.labels)
-        precision, recall, _ = precision_recall_curve(labels, self.predictions)
-        auc_preision_recall = auc(recall, precision)
+        try:
+            precision, recall, _ = precision_recall_curve(labels, self.predictions)
+            auc_preision_recall = auc(recall, precision)
+        except ValueError:
+            auc_preision_recall = 0.0
+
         return auc_preision_recall
 
     def get_tpr_at_sensitivity(self, sensitivity_target=0.95):
         # using mixup, the resulting labels are no longer binary but continous between 0 and 1
         # we round to get any kind of result but for the training data, the auc-roc is not quite meaningful
         labels = np.round(self.labels)
-        fpr, tpr, thresh = roc_curve(labels, self.predictions)
-        sensitivity = 1 - fpr
-        distance_to_target_sensitivity = np.abs(sensitivity - sensitivity_target)
-        closest_index = np.argmin(distance_to_target_sensitivity)
-        return tpr[closest_index]
+        try:
+            fpr, tpr, thresh = roc_curve(labels, self.predictions)
+            sensitivity = 1 - fpr
+            distance_to_target_sensitivity = np.abs(sensitivity - sensitivity_target)
+            closest_index = np.argmin(distance_to_target_sensitivity)
+            return tpr[closest_index]
+        except ValueError:
+            return 0.0
 
     def show_all_runs(self, mode="eval", metric="auc_roc", n_samples_for_smoothing=None, show_separate_folds=False,
                       show_std_area_plot=True, show_n_best_runs="all", color_by_hyperparameter=None):
@@ -627,7 +641,8 @@ class IntraEpochMetricsTracker:
                     name = f": {color_by_hyperparameter}: {run.parameters[color_by_hyperparameter]}"
                 else:
                     color = run.color
-                    name = str(run.parameters)
+                    # name = str(run.parameters)
+                    name = self.get_only_varied_hyperparams(run.parameters)
 
                 run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing,
                                   show_separate_folds=show_separate_folds, fig=fig,
@@ -645,7 +660,7 @@ class IntraEpochMetricsTracker:
                                sort_by_current_metric=True):
         if show_n_best_runs == "all":
             show_n_best_runs = self.n_hyperparameter_runs
-
+        # varied_hyperparameters = self.get_columns_with_multiple_unique_values()
         df = pd.DataFrame()
         for run in self.crossval_runs:
             row = dict(run.best_performances["eval"])
@@ -668,7 +683,8 @@ class IntraEpochMetricsTracker:
                 name = f": {color_by_hyperparameter}: {run.parameters[color_by_hyperparameter]}"
             else:
                 color = run.color
-                name = str(run.parameters)
+                # name = str({k: v for k, v in run.parameters.items() if k in varied_hyperparameters})
+                name = self.get_only_varied_hyperparams(run.parameters)
 
             temp = df[df["combined_params"] == str(run.parameters)]
             fig.add_trace(go.Box(y=temp[metric], boxmean=True, x=[metric] * len(temp), name=name,
@@ -678,6 +694,157 @@ class IntraEpochMetricsTracker:
 
         fig.update_layout(width=1300, height=600, margin=dict(l=150, r=20, t=10, b=20), boxmode='group',
                           legend={"orientation": 'h'})
+        return fig
+
+    def boxplot_run_statistics_grouped(self, metric, show_n_best_runs="all", group_by_hyperparameter=None,
+                                       sort_by_current_metric=True):
+
+        unique_combinations = self.get_unique_parameter_combinations(group_by_hyperparameter)
+
+        if show_n_best_runs == "all":
+            show_n_best_runs = self.n_hyperparameter_runs
+        # varied_hyperparameters = self.get_columns_with_multiple_unique_values()
+        df = pd.DataFrame()
+        for run in self.crossval_runs:
+            row = dict(run.best_performances["eval"])
+            row.update({"combined_params": str(run.parameters)})
+            df = pd.concat([df, pd.DataFrame(row)], ignore_index=True)
+
+        black = (0, 0, 0, 1)
+        fig = go.Figure()
+        if sort_by_current_metric:
+            sort_by_metric = metric
+        else:
+            sort_by_metric = self.performance_eval_params["metric_used"]
+        best_indices = self.get_indices_of_best_n_runs(n=show_n_best_runs, sort_by=sort_by_metric)
+
+        for idx in best_indices:
+            run = self.crossval_runs[idx]
+            # if color_by_hyperparameter is not None:
+            # hyperparams = list(self.full_metric_performance_df[color_by_hyperparameter].unique())
+            # name = f": {color_by_hyperparameter}: {run.parameters[color_by_hyperparameter]}"
+            # else:
+            #     color = run.color
+            #     name = str({k: v for k, v in run.parameters.items() if k in varied_hyperparameters})
+            #     name = self.get_only_varied_hyperparams(run.parameters)
+
+            # color = run.color
+            name = self.get_only_varied_hyperparams(run.parameters)
+            group_offset_name = dict(run.parameters)
+            del group_offset_name[group_by_hyperparameter]
+            group_offset_name = self.get_only_varied_hyperparams(group_offset_name)
+            color = color_cycle[unique_combinations.index(str(group_offset_name))]
+            # print(group_offset_name)
+            if group_by_hyperparameter is not None:
+                group_name = run.parameters[group_by_hyperparameter]
+            else:
+                group_name = metric
+
+            temp = df[df["combined_params"] == str(run.parameters)]
+            fig.add_trace(go.Box(y=temp[metric], boxmean=True,
+                                 # x=[group_name] * len(temp),
+                                 x=[f"{group_by_hyperparameter}: {group_name}"],
+                                 # x=f"[group_name],
+                                 offsetgroup=group_offset_name,
+                                 name=group_offset_name,
+                                 legendgroup=group_offset_name,
+                                 text=group_offset_name,
+                                 hoverinfo="y+text",
+                                 # jitter=0.01,
+                                 pointpos=0.0,
+                                 boxpoints='all',
+                                 marker_color=f"rgba{black}",
+                                 line_color=f"rgba{color}",
+                                 showlegend=True)
+                          )
+
+        fig.update_layout(width=1300, height=600,
+                          margin=dict(l=150, r=20, t=10, b=20),
+                          boxmode='group',
+                          legend={"orientation": 'h'},
+                          boxgap=0.3,
+                          boxgroupgap=0.1
+                          )
+        return fig
+
+    def boxplot_groupedby_combination(self, metric, show_n_best_runs="all", separate_param=None,
+                                      sort_by_current_metric=True, boxgap=0.5, fontsize=12):
+
+        unique_combinations = list(set(list(self.full_metric_performance_df[separate_param])))
+        print(unique_combinations)
+        if show_n_best_runs == "all":
+            show_n_best_runs = self.n_hyperparameter_runs
+        # varied_hyperparameters = self.get_columns_with_multiple_unique_values()
+        df = pd.DataFrame()
+        for run in self.crossval_runs:
+            row = dict(run.best_performances["eval"])
+            row.update({"combined_params": str(run.parameters)})
+            df = pd.concat([df, pd.DataFrame(row)], ignore_index=True)
+
+        black = (0, 0, 0, 1)
+        fig = go.Figure()
+        if sort_by_current_metric:
+            sort_by_metric = metric
+        else:
+            sort_by_metric = self.performance_eval_params["metric_used"]
+        best_indices = self.get_indices_of_best_n_runs(n=show_n_best_runs, sort_by=sort_by_metric)
+
+        stupid_way_of_showing_no_duplicates_in_legend = []
+        for idx in best_indices:
+            run = self.crossval_runs[idx]
+
+            group_name = dict(run.parameters)
+            del group_name[separate_param]
+            group_name = self.get_only_varied_hyperparams(group_name).replace("{", "").replace("}", "")
+
+            group_offset_name = str(run.parameters[separate_param])
+            color = color_cycle[unique_combinations.index(str(group_offset_name))]
+
+            if group_offset_name in stupid_way_of_showing_no_duplicates_in_legend:
+                showlegend = False
+            else:
+                showlegend = True
+                stupid_way_of_showing_no_duplicates_in_legend.append(group_offset_name)
+
+            group_name = group_name.replace(", ", "<br>")
+            temp = df[df["combined_params"] == str(run.parameters)]
+            fig.add_trace(go.Box(y=temp[metric], boxmean=True,
+                                 # x=[group_name] * len(temp),
+                                 x=[f"{group_name}"],
+                                 # x=f"[group_name],
+                                 offsetgroup=group_offset_name,
+                                 name=group_offset_name,
+                                 legendgroup=group_offset_name,
+                                 text=group_offset_name,
+                                 hoverinfo="y+text",
+                                 # jitter=0.01,
+                                 pointpos=0.0,
+                                 boxpoints='all',
+                                 marker_color=f"rgba{black}",
+                                 line_color=f"rgba{color}",
+                                 showlegend=showlegend)
+                          )
+        num_groups = len(self.get_unique_parameter_combinations(separate_param))
+        for i in range(num_groups-1):
+            fig.add_vline(x=i+0.5, line_width=1, line_dash="dash", line_color="black")
+
+        fig.update_layout(width=1600, height=600,
+                          margin=dict(l=150, r=20, t=10, b=20),
+                          boxmode='group',
+                          legend=dict(title=dict(text=f"Hyperparameter {separate_param}: "),
+                                      orientation='h',
+                                      x=0.5, y=1.1,
+                                      xanchor='center',
+                                      yanchor='top'),
+                          boxgap=boxgap,
+                          boxgroupgap=0.1,
+                          autosize=True,
+                          xaxis=dict(
+                              tickmode='array',
+                              tickangle=0,
+                              tickfont=dict(size=fontsize)
+                          )
+                          )
         return fig
 
     def show_single_run(self, run_id, mode="eval", metric="auc_roc", n_samples_for_smoothing=None,
@@ -691,8 +858,9 @@ class IntraEpochMetricsTracker:
 
         run_idx = self.run_ids.index(run_id)
         run = self.crossval_runs[run_idx]
+        name = self.get_only_varied_hyperparams(run.parameters)
 
-        run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing,
+        run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing, name=name,
                           show_separate_folds=show_separate_folds, fig=fig, show_std_area_plot=show_std_area_plot)
         fig.update_layout(autosize=False, width=1300, height=600, showlegend=True,
                           margin=dict(l=20, r=20, t=50, b=20),
@@ -733,7 +901,32 @@ class IntraEpochMetricsTracker:
             "epochs": self.n_epochs
         })
 
+    def get_only_varied_hyperparams(self, hyperparameter_dict):
+        columns = self.get_only_varied_hyperparam_columns()
+        name = str({k: v for k, v in hyperparameter_dict.items() if k in columns})
+        return name
 
+    def get_only_varied_hyperparam_columns(self):
+        """
+        Returns only the columns that have more than one unique value in their rows.
+        """
+        df = self.full_metric_performance_df[self.hyperparameters]
+        cols_with_multiple_unique_vals = []
+        for col in df.columns:
+            unique_vals = df[col].unique()
+            if len(unique_vals) > 1:
+                cols_with_multiple_unique_vals.append(col)
+        columns = list(df[cols_with_multiple_unique_vals].columns)
+        return columns
+
+    def get_unique_parameter_combinations(self, separate_parameter=None):
+        cols = self.get_only_varied_hyperparam_columns()
+        if separate_parameter is not None:
+            cols.remove(separate_parameter)
+        parameter_combinations = self.full_metric_performance_df[cols].to_dict(orient='records')
+        parameter_combinations = [str(item) for item in parameter_combinations]
+        unique_combinations = list(set(parameter_combinations))
+        return unique_combinations
 
     def get_indices_of_best_n_runs(self, n, sort_by=None):
         if sort_by is None:

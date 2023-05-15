@@ -1,0 +1,11 @@
+\babel@toc {USenglish}{}
+\contentsline {chapter}{\numberline {1}Introduction and Usage}{4}{chapter.1}% 
+\contentsline {section}{\numberline {1.1}Structure of Sections}{4}{section.1.1}% 
+\contentsline {section}{\numberline {1.2}Layout of Files/Directories}{4}{section.1.2}% 
+\contentsline {section}{\numberline {1.3}Floats: Graphics, Tables, and Listings}{5}{section.1.3}% 
+\contentsline {subsection}{\numberline {1.3.1}Figures and Tables}{5}{subsection.1.3.1}% 
+\contentsline {subsection}{\numberline {1.3.2}Listings}{6}{subsection.1.3.2}% 
+\contentsline {section}{\numberline {1.4}Miscellaneous}{6}{section.1.4}% 
+\contentsline {chapter}{\numberline {2}Fancy and Advanced}{7}{chapter.2}% 
+\contentsline {section}{\numberline {2.1}Bringing Style Into Your Thesis}{7}{section.2.1}% 
+\contentsline {section}{\numberline {2.2}Higher Mathematics}{7}{section.2.2}% 

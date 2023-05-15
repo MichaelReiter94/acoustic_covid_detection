@@ -3,7 +3,193 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_Weights
+from utils.utils import ResidualInstanceNorm2d
+from torchinfo import summary
 
+
+def get_bag_statistics(y, batch_size, bag_size):
+    y = y.view(batch_size, bag_size)
+    eps = 1e-6
+    mu = y.mean(dim=1)
+    diff = y.t() - mu
+    sigma = torch.pow(torch.mean(torch.pow(diff, 2.0), dim=0), 0.5) + eps
+    z_scores = diff / sigma
+    skew = torch.mean(torch.pow(z_scores, 3), dim=0)
+    kurtoses = torch.mean(torch.pow(z_scores, 4), dim=0)
+    median, _ = y.median(dim=1)
+    minimum, _ = y.min(dim=1)
+    maximum, _ = y.max(dim=1)
+
+    bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses]).t()
+    return bag_statistics
+
+
+class PredictionLevelMILSingleGatedLayer(nn.Module):
+    def __init__(self, n_neurons, dropout=0.25):
+        super().__init__()
+        self.n_bag_statistics = 7
+        self.n_hidden_attention = n_neurons
+        self.dropout = dropout
+        self.resnet_out_features = 512
+
+        self.binary_classification_layer = nn.Sequential(
+            nn.Linear(self.resnet_out_features, 1),
+            nn.Sigmoid()
+        )
+
+        self.attention_V = nn.Sequential(
+            nn.Linear(self.n_bag_statistics, self.n_hidden_attention),
+            nn.Tanh(),
+        )
+        self.attention_U = nn.Sequential(
+            nn.Linear(self.n_bag_statistics, self.n_hidden_attention),
+            nn.Sigmoid(),
+        )
+        self.attention_out = nn.Sequential(
+            nn.Dropout(p=self.dropout),
+            nn.Linear(self.n_hidden_attention, 1)
+        )
+
+    def forward(self, y, batch_size, bag_size):
+        y = self.binary_classification_layer(y.squeeze())
+        bag_statistics = get_bag_statistics(y, batch_size, bag_size)
+        A_V = self.attention_V(bag_statistics)
+        A_U = self.attention_U(bag_statistics)
+        y_pred = self.attention_out(A_V * A_U)  # element wise multiplication
+        return y_pred
+
+
+class PredictionLevelMILDoubleDenseLayer(nn.Module):
+    def __init__(self, n_neurons, dropout=0.25):
+        super().__init__()
+        self.n_bag_statistics = 7
+        self.n_hidden_attention = n_neurons
+        self.dropout = dropout
+        self.resnet_out_features = 512
+
+        self.binary_classification_layer = nn.Sequential(
+            nn.Linear(self.resnet_out_features, 1),
+            nn.Sigmoid()
+        )
+        self.mil_net = nn.Sequential(
+            nn.Linear(self.n_bag_statistics, self.n_hidden_attention),
+            nn.Dropout(p=self.dropout),
+            nn.Linear(self.n_hidden_attention, self.n_hidden_attention),
+            nn.Dropout(p=self.dropout),
+            nn.Linear(self.n_hidden_attention, 1)
+        )
+
+    def forward(self, y, batch_size, bag_size):
+        y = self.binary_classification_layer(y.squeeze())
+        bag_statistics = get_bag_statistics(y, batch_size, bag_size)
+        y_pred = self.mil_net(bag_statistics)  # element wise multiplication
+        return y_pred
+
+
+class FeatureLevelMIL(nn.Module):
+    def __init__(self, n_neurons, dropout=0.25):
+        super().__init__()
+        self.n_hidden_attention = n_neurons
+        self.dropout = dropout
+        self.resnet_out_features = 512
+        #         self.n_features = n_features
+
+        #         self.feature_layer = nn.Sequential(
+        #             nn.Linear(self.resnet_out_features, n_features),
+        #         )
+
+        self.attention_V = nn.Sequential(
+            nn.Linear(self.resnet_out_features, self.n_hidden_attention),
+            nn.Tanh(),
+        )
+        self.attention_U = nn.Sequential(
+            nn.Linear(self.resnet_out_features, self.n_hidden_attention),
+            nn.Sigmoid(),
+        )
+        self.attention_out = nn.Sequential(
+            nn.Dropout(p=self.dropout),
+            nn.Linear(self.n_hidden_attention, 1)
+        )
+
+        self.output_layer = nn.Sequential(
+            nn.Linear(in_features=self.resnet_out_features, out_features=1)
+            # nn.Linear(in_features=128, out_features=1)
+        )
+
+    def forward(self, y, batch_size, bag_size):
+        # y = self.feature_layer(y.squeeze())
+
+        y = y.squeeze()
+        # batchsize*bagsize x 512
+
+        A_V = self.attention_V(y)
+        A_U = self.attention_U(y)
+        attentation_coef = self.attention_out(A_V * A_U)  # element wise multiplication
+        attentation_coef = attentation_coef.view(batch_size, bag_size, 1)
+        attentation_coef = F.softmax(attentation_coef, dim=1)
+        # batchsize x bagsize x 1
+
+        x_combined_bag = y.view(batch_size, bag_size, self.resnet_out_features) * attentation_coef
+        # y = y.view(batch_size, bag_size, 1)
+        # [batchsize x bagsize x 512] * [batchsize x bagsize x 1]
+        x_combined_bag = x_combined_bag.mean(dim=1)
+        # [batch_size x 512]
+        y_pred = self.output_layer(x_combined_bag)
+        # [batch_size x 1]
+        return y_pred
+
+
+class FeatureLevelMILExtraFeatureLayer(nn.Module):
+    def __init__(self, n_features, n_neurons, dropout=0.25):
+        super().__init__()
+        self.n_hidden_attention = n_neurons
+        self.dropout = dropout
+        self.resnet_out_features = 512
+        self.n_features = n_features
+
+        self.feature_layer = nn.Sequential(
+            nn.Linear(self.resnet_out_features, self.n_features),
+            nn.Dropout(p=self.dropout)
+        )
+
+        self.attention_V = nn.Sequential(
+            nn.Linear(self.n_features, self.n_hidden_attention),
+            nn.Tanh(),
+        )
+        self.attention_U = nn.Sequential(
+            nn.Linear(self.n_features, self.n_hidden_attention),
+            nn.Sigmoid(),
+        )
+        self.attention_out = nn.Sequential(
+            nn.Dropout(p=self.dropout),
+            nn.Linear(self.n_hidden_attention, 1)
+        )
+
+        self.output_layer = nn.Sequential(
+            nn.Linear(self.n_features, 1)
+        )
+
+    def forward(self, y, batch_size, bag_size):
+        # y = self.feature_layer(y.squeeze())
+
+        y = self.feature_layer(y.squeeze())
+        # batchsize*bagsize x 512
+
+        A_V = self.attention_V(y)
+        A_U = self.attention_U(y)
+        attentation_coef = self.attention_out(A_V * A_U)  # element wise multiplication
+        attentation_coef = attentation_coef.view(batch_size, bag_size, 1)
+        attentation_coef = F.softmax(attentation_coef, dim=1)
+        # batchsize x bagsize x 1
+
+        x_combined_bag = y.view(batch_size, bag_size, self.n_features) * attentation_coef
+        # y = y.view(batch_size, bag_size, 1)
+        # [batchsize x bagsize x 512] * [batchsize x bagsize x 1]
+        x_combined_bag = x_combined_bag.mean(dim=1)
+        # [batch_size x 512]
+        y_pred = self.output_layer(x_combined_bag)
+        # [batch_size x 1]
+        return y_pred
 
 
 class BrogrammersModel(nn.Module):
@@ -24,7 +210,8 @@ class BrogrammersModel(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=2)
         self.conv2 = nn.Conv2d(in_channels=n_filters1, out_channels=n_filters2, kernel_size=2)
         self.batch_norm2d = nn.BatchNorm2d(n_filters2)
-        self.dense1 = nn.Linear(in_features=((TIMESTEPS-2)//2-1) * ((MFCC_BINS - 2)//2-1) * n_filters2, out_features=256)
+        self.dense1 = nn.Linear(in_features=((TIMESTEPS - 2) // 2 - 1) * ((MFCC_BINS - 2) // 2 - 1) * n_filters2,
+                                out_features=256)
         self.dense2 = nn.Linear(in_features=256, out_features=128)
         self.dense3 = nn.Linear(in_features=128, out_features=1)
         print("loading brogrammers module/class based model")
@@ -81,7 +268,7 @@ class BrogrammersSequentialModel(nn.Module):
             # 32x64x11x429 --> 32x(64*11*429) = 32x300608 because 32 is the batch size meaning we have
             # 32 samples we do not want to combine
             nn.Flatten(start_dim=1),
-            nn.Linear(in_features=(TIMESTEPS-4) * (MFCC_BINS - 4) * n_filters, out_features=256, bias=True),
+            nn.Linear(in_features=(TIMESTEPS - 4) * (MFCC_BINS - 4) * n_filters, out_features=256, bias=True),
             nn.ReLU(),
             # TODO add kernel, bias and activity regularizers???
             nn.Dropout(p=0.5),
@@ -93,18 +280,12 @@ class BrogrammersSequentialModel(nn.Module):
         )
         print("loading brogrammers sequential model")
 
-
     def forward(self, input_data):
         prediction = self.model(input_data)
         return prediction
 
 
-def get_resnet18(add_dropouts=False):
-    TIMESTEPS = 224
-    FREQUNCY_BINS = 224
-    # N_CHANNELS = 3
-    N_CHANNELS = 1
-
+def get_resnet18(add_dropouts=False, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1):
     my_model = resnet18(weights=ResNet18_Weights.DEFAULT)
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
 
@@ -112,32 +293,57 @@ def get_resnet18(add_dropouts=False):
     # for param in my_model.parameters():
     #     param.requires_grad = False
 
-    ######################### change number o finput channels from 3 to 1 ################################
+    ########################### change number of finput channels from 3 to 1 #################################
+    # (either use the pretrained weights of 1 channel or average them over all 3)
 
-    weights = my_model.conv1.weight
-    # weights_single_channel = weights.mean(dim=1).unsqueeze(dim=1)
-    weights_single_color = weights[:, 0, :, :].unsqueeze(dim=1)
+    if N_CHANNELS == 1:
+        weights = my_model.conv1.weight
+        # weights_mean = weights.mean(dim=1).unsqueeze(dim=1)
+        weights_single_color = weights[:, 0, :, :].unsqueeze(dim=1)
 
-    in_channels = 1
-    out_channels = 64
-    my_model.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=7, stride=2, padding=3, bias=False)
-    # my_model.conv1.weight = nn.Parameter(weights_single_channel)
-    my_model.conv1.weight = nn.Parameter(weights_single_color)
+        my_model.conv1 = nn.Conv2d(N_CHANNELS, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False)
+        # my_model.conv1.weight = nn.Parameter(weights_mean)
+        my_model.conv1.weight = nn.Parameter(weights_single_color)
 
-    ############################  add dropouts (spatial and regular to resnet  ################################
+    ############################  add residual normalization layers to resnet  ################################
+    gamma = 1.0
+    if add_residual_layers:
+        layers = summary(my_model, input_size=(1, N_CHANNELS, FREQUNCY_BINS, TIMESTEPS))
+        layers = str(layers).split("\n")
+        layers = [layer for layer in layers if "BatchNorm2d: 3" in layer]
+        fdims = [int(layer.split("[")[1].split("]")[0].split(",")[2]) for layer in layers]
+
+        # for every major layer (which is hardcoded for resnet18) we iterate over each BasicBlock in this layer and add
+        # a residual normalization layer after the batch norm. such a basic block (for resnet18) has 2 batch norm layers
+        # might need changes for resnet50 etc
+        layers = [my_model.layer1, my_model.layer2, my_model.layer3, my_model.layer4]
+        counter = 0
+        for layer in layers:
+            for i in range(len(layer)):
+                layer[i].bn1 = nn.Sequential(
+                    layer[i].bn1,
+                    # ResidualInstanceNorm2d(num_features=layer[i].conv1.out_channels, gamma=gamma,
+                    #                        gamma_is_learnable=True)
+                    ResidualInstanceNorm2d(num_features=fdims[counter], gamma=gamma,
+                                           affine=True, track_running_stats=False, gamma_is_learnable=True)
+                )
+                counter += 1
+                layer[i].bn2 = nn.Sequential(
+                    layer[i].bn2,
+                    # ResidualInstanceNorm2d(num_features=layer[i].conv2.out_channels, gamma=gamma,
+                    #                        gamma_is_learnable=True)
+                    ResidualInstanceNorm2d(num_features=fdims[counter], gamma=gamma,
+                                           affine=True, track_running_stats=False, gamma_is_learnable=True)
+                )
+                counter += 1
+
+    ############################  add dropouts (spatial and regular) to resnet  ################################
     if add_dropouts:
-        my_model.layer1 = nn.Sequential(*my_model.layer1, nn.Dropout2d(p=0.1))
-        my_model.layer2 = nn.Sequential(*my_model.layer2, nn.Dropout2d(p=0.2))
-        my_model.layer3 = nn.Sequential(*my_model.layer3, nn.Dropout2d(p=0.3))
-        my_model.layer4 = nn.Sequential(*my_model.layer4, nn.Dropout2d(p=0.4))
+        my_model.layer1 = nn.Sequential(*my_model.layer1, nn.Dropout2d(p=0.2))
+        my_model.layer2 = nn.Sequential(*my_model.layer2, nn.Dropout2d(p=0.3))
+        my_model.layer3 = nn.Sequential(*my_model.layer3, nn.Dropout2d(p=0.4))
+        my_model.layer4 = nn.Sequential(*my_model.layer4, nn.Dropout2d(p=0.5))
         my_model.avgpool = nn.Sequential(my_model.avgpool, nn.Dropout(p=0.5))
-
-
-
-
-
-
-
 
     n_features = my_model.fc.in_features
     my_model.fc = nn.Linear(n_features, 1)
@@ -178,7 +384,7 @@ class BrogrammersMIL(nn.Module):
             nn.Flatten(start_dim=1)
         )
 
-        n_linear_params = ((TIMESTEPS - 2)//2 - 1) * ((MFCC_BINS - 2)//2 - 1) * n_filters2
+        n_linear_params = ((TIMESTEPS - 2) // 2 - 1) * ((MFCC_BINS - 2) // 2 - 1) * n_filters2
         self.n_hidden_attention = n_hidden_attention
         n_linear_out = self.n_hidden_attention
 
@@ -192,8 +398,6 @@ class BrogrammersMIL(nn.Module):
             nn.Linear(in_features=128, out_features=self.n_hidden_attention),
             nn.ReLU(),
         )
-
-
 
         # # regular version of the MIL attention mechanism
         # self.mil_attention = nn.Sequential(
@@ -255,11 +459,12 @@ class BrogrammersMIL(nn.Module):
         return y_pred
 
 
-
-class Resnet18MIL(nn.Module):
-    def __init__(self, n_hidden_attention=32):
+class Resnet18MILOld(nn.Module):
+    def __init__(self, n_hidden_attention=32, add_dropouts=True, add_residual_layers=False, F=224, T=224, C=1):
         super().__init__()
-        self.resnet = resnet18(weights=ResNet18_Weights.DEFAULT)
+        # self.resnet = resnet18(weights=ResNet18_Weights.DEFAULT)
+        self.resnet = get_resnet18(add_dropouts=add_dropouts, add_residual_layers=add_residual_layers,
+                                   FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C)
         # TIMESTEPS = 224
         # FREQUNCY_BINS = 224
         # N_CHANNELS = 3
@@ -284,11 +489,12 @@ class Resnet18MIL(nn.Module):
         # Maximilian Ilse, Jakub M. Tomczak, Max Welling
         self.attention_V = nn.Sequential(
             nn.Linear(n_bag_statistics, self.n_hidden_attention),
-            nn.Tanh()
+            nn.Tanh(),
+            nn.Dropout(p=0.25)
         )
         self.attention_U = nn.Sequential(
             nn.Linear(n_bag_statistics, self.n_hidden_attention),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
         self.attention_out = nn.Linear(self.n_hidden_attention, 1)
 
@@ -321,9 +527,35 @@ class Resnet18MIL(nn.Module):
         return y_pred
 
 
+class Resnet18MIL(nn.Module):
+    def __init__(self, n_hidden_attention=32, add_dropouts=True, add_residual_layers=False, F=224, T=224, C=1):
+        super().__init__()
+        self.resnet = get_resnet18(add_dropouts=add_dropouts, add_residual_layers=add_residual_layers,
+                                   FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C)
+        # trim off the last dense layer [512 --> 1] to be able to add the MIL networks in all variations
+        self.resnet = torch.nn.Sequential(*(list(self.resnet.children())[:-1]))
+        # self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=0.25)
+        # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=0.25)
+        # self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=0.25)
+        self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention,
+                                                        n_neurons=n_hidden_attention, dropout=0.25)
+        self.batch_size, self.bag_size, self.feature_size = None, None, None
+
+    def forward(self, x):
+        x = self.mil_reshape(x)
+        y = self.resnet(x)
+        y = self.mil_net(y, self.batch_size, self.bag_size)
+        return y
+
+    def mil_reshape(self, x):
+        # gets the shape of batch size and bag size and feature size and returns the data in the shape
+        # [batch_size*bag_size x channels x FreqBins x TimeSteps] to be able to process it with the resnet
+        self.batch_size, self.bag_size, self.feature_size = x.shape[0], x.shape[1], x.shape[2:]
+        x = x.view(self.batch_size * self.bag_size, *self.feature_size)
+        return x
 
 
-class PredLevelMIL(nn.Module):
+class PredLevelMIL(nn.Module):  # brogrammers
     def __init__(self, n_hidden_attention=32):
         super().__init__()
         TIMESTEPS = 259
@@ -344,7 +576,7 @@ class PredLevelMIL(nn.Module):
             nn.Flatten(start_dim=1)
         )
 
-        n_linear_params = ((TIMESTEPS - 2)//2 - 1) * ((MFCC_BINS - 2)//2 - 1) * n_filters2
+        n_linear_params = ((TIMESTEPS - 2) // 2 - 1) * ((MFCC_BINS - 2) // 2 - 1) * n_filters2
 
         self.linear_layers = nn.Sequential(
             nn.Linear(in_features=n_linear_params, out_features=256),
@@ -355,7 +587,6 @@ class PredLevelMIL(nn.Module):
             nn.Dropout(p=0.3),
             nn.Linear(in_features=128, out_features=1)
         )
-
 
         self.n_hidden_attention = n_hidden_attention
         n_bag_statistics = 7
@@ -380,7 +611,6 @@ class PredLevelMIL(nn.Module):
             nn.Sigmoid()
         )
         self.attention_out = nn.Linear(self.n_hidden_attention, 1)
-
 
         print("loading Multiple Instance Learning model based on brogrammers")
 
@@ -407,7 +637,6 @@ class PredLevelMIL(nn.Module):
         # kurtoses = torch.mean(torch.pow(z_scores, 4))
         # bag_statistics = torch.stack([mu, y.median(), sigma, y.min(), y.max(), skew, kurtoses])
 
-
         mu = y.mean(dim=1)
         diff = y.t() - mu
         sigma = torch.pow(torch.mean(torch.pow(diff, 2.0), dim=0), 0.5)
@@ -420,7 +649,6 @@ class PredLevelMIL(nn.Module):
         minimum, _ = y.min(dim=1)
         maximum, _ = y.max(dim=1)
         bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses]).t()
-
 
         # y_pred = torch.stack([y.max()])
         ###################################################     MIL    #################################################
@@ -443,4 +671,3 @@ class PredLevelMIL(nn.Module):
         # two classes to address class imbalance!! if BCELossWithLogits is not used uncomment the following line:
         # y_pred = torch.sigmoid(y_pred)
         return y_pred
-

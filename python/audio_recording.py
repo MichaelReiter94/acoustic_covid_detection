@@ -43,7 +43,7 @@ class AudioRecording:
     def __init__(self, data_path, type_of_recording, audio_parameters, augmentations=None):
         combined_recordings = {
             "combined_coughs": ["cough-heavy", "cough-shallow"],
-            "combined_breaths": ["breathing-deep", "breathing-shallow"],
+            "combined_breaths": ["breathing-shallow", "breathing-deep"],
             "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"]
         }
 
@@ -69,7 +69,7 @@ class AudioRecording:
         self.original_duration = None
         self.original_duration_trimmed_silence = None
 
-        audio, self.original_sr = self.get_audio(trim_silence_below_x_dB=36)
+        audio, self.original_sr = self.get_audio(trim_silence_below_x_dB=30)
 
         if self.augmentations is not None:
             audio = self.augmentations(audio, self.original_sr)
@@ -109,17 +109,25 @@ class AudioRecording:
             audio, sr = librosa.load(self.file_path, sr=None)
             if trim_silence_below_x_dB is not None:
                 audio, _ = librosa.effects.trim(audio, top_db=trim_silence_below_x_dB)
+                audio = librosa.util.normalize(audio)
+
         else:
             audio = np.array([]).astype("float32")
             for path in self.file_path:
                 audio_temp, sr = librosa.load(path, sr=None)
                 if trim_silence_below_x_dB is not None:
                     audio_temp, _ = librosa.effects.trim(audio_temp, top_db=trim_silence_below_x_dB)
-                audio = np.concatenate([audio, audio_temp])
+                    audio_temp = librosa.util.normalize(audio_temp)
 
-        self.original_duration = round(len(audio) / sr, 2)
+                audio = np.concatenate([audio, audio_temp])
+                # trim again after combining... if one of the recordings was silent it only gets removed here
+            audio, _ = librosa.effects.trim(audio, top_db=trim_silence_below_x_dB)
+
+        # normalize. I don't know why I removed this again. maybe it was an accident?
+        # self.original_duration = round(len(audio) / sr, 2)
         self.original_duration_trimmed_silence = round(len(audio) / sr, 2)
         print(f"Duration of the Recording: {round(len(audio) / sr, 2)}")
+        # reintroduce normalization? why is it gone?
         return audio, sr
 
     def show_waveform(self, trim_silence_below_x_dB=48):
