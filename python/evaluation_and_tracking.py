@@ -70,6 +70,18 @@ color_cycle = [(31, 119, 180, 1),
 metrics_to_minimize = ("loss", "fpr", "fnr")
 metrics_to_maximize = ("auc_roc", "accuracy", "f1_score", "auc_prec_recall", "precision", "tpr_at_95", "tpr", "tnr")
 
+ylimit_dict = {"auc_roc": [0.5, 1.0],
+               "accuracy": [0.5, 1.0],
+               "f1_score": [0.2, 0.8],
+               "auc_prec_recall": [0.2, 0.8],
+               "precision": [0.2, 1.0],
+               "tpr_at_95": [0.0, 0.8],
+               "tpr": [0.4, 1.0],
+               "tnr": [0.4, 1.0],
+               "loss": [0.2, 1.0],
+               "fpr": [0.0, 0.5],
+               "fnr": [0.0, 0.5],
+               }
 
 def pretty_print_dict(dictionary):
     for k, v in dictionary.items():
@@ -260,7 +272,7 @@ class CrossValRuns:
                 self.best_performance_std[mode][metric] = np.nanstd(self.best_performances[mode][metric])
 
     def plot_mean_run(self, mode, metric, n_samples_for_smoothing=1, show_separate_folds=False,
-                      show_std_area_plot=True, fig=None, color=None, name=None):
+                      show_std_area_plot=True, fig=None, color=None, name=None, showlegend=True):
         # note, that neither mean nor std of the cross validation is calculated from smoothed curves of the folds, but
         # it is rather smoothed AFTER calculations. This results usually (always?) in a higher std
         if color is None:
@@ -279,24 +291,23 @@ class CrossValRuns:
         if show_separate_folds:
             for run in self.runs:
                 fold = run.get_metric(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing)
-                ignore_n_first_epochs = 5
                 epoch = run.get_epoch_at_minmax(
                     metric=self.performance_eval_params["metric_used"],
                     smoothing=n_samples_for_smoothing,  # smoothing parameter can be changed dynamically by the user
                     ignore_first_n_epochs=self.performance_eval_params["ignore_first_n_epochs"])
 
                 fig.add_trace(go.Scatter(x=np.array(epoch), y=np.array(fold[epoch]), showlegend=False,
-                                         name="fold extremum", legendgroup=str(self.parameters),
+                                         name="fold extremum", legendgroup=name,
                                          marker=dict(size=15, color=rgba_plotly(color))))
 
                 fig.add_trace(go.Scatter(y=fold, opacity=0.35, showlegend=False,
-                                         name="fold", legendgroup=str(self.parameters),
+                                         name="fold", legendgroup=name,
                                          line=dict(color=rgba_plotly(color), width=2, dash='dash')))
 
         fig.add_trace(go.Scatter(y=mean_curve,
                                  name=name,
-                                 legendgroup=str(self.parameters),
-                                 # showlegend=False,
+                                 legendgroup=name,
+                                 showlegend=showlegend,
                                  line=dict(color=rgba_plotly(color))))
         return fig
 
@@ -632,6 +643,8 @@ class IntraEpochMetricsTracker:
             n_samples_for_smoothing = self.performance_eval_params["smoothing"]
 
         fig = go.Figure()
+        stupid_way_of_showing_no_duplicates_in_legend = []
+
         for idx, run in enumerate(self.crossval_runs):
             if idx in self.get_indices_of_best_n_runs(n=show_n_best_runs,
                                                       sort_by=self.performance_eval_params["metric_used"]):
@@ -644,14 +657,30 @@ class IntraEpochMetricsTracker:
                     # name = str(run.parameters)
                     name = self.get_only_varied_hyperparams(run.parameters)
 
+                if name in stupid_way_of_showing_no_duplicates_in_legend:
+                    showlegend = False
+                else:
+                    showlegend = True
+                    stupid_way_of_showing_no_duplicates_in_legend.append(name)
+
                 run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing,
                                   show_separate_folds=show_separate_folds, fig=fig,
-                                  show_std_area_plot=show_std_area_plot, color=color, name=name)
+                                  show_std_area_plot=show_std_area_plot, color=color, name=name,
+                                  showlegend=showlegend
+                                  )
+        # metrics_to_minimize = ("loss", "fpr", "fnr")
+        # metrics_to_maximize = (
+        # "auc_roc", "accuracy", "f1_score", "auc_prec_recall", "precision", "tpr_at_95", "tpr", "tnr")
 
-        fig.update_layout(autosize=False, width=1300, height=600, showlegend=True,
-                          margin=dict(l=20, r=20, t=50, b=20),
-                          title_text=f"<b>{mode} - {metric}</b>", title_x=0.3, title_y=0.97, titlefont=dict(size=24),
-                          legend={"orientation": 'h'}
+        fig.update_layout(autosize=False, width=1600, height=600, showlegend=True,
+                          margin=dict(l=20, r=20, t=20, b=20),
+                          title_text=f"<b>{mode} - {metric}</b>", title_x=0.0, title_y=0.97, titlefont=dict(size=24),
+                          legend=dict(title=dict(text=f"Hyperparameter {color_by_hyperparameter}: "),
+                                      orientation='h',
+                                      x=0.5, y=1.1,
+                                      xanchor='center',
+                                      yanchor='top'),
+                          yaxis_range=ylimit_dict[metric]
                           )
         # fig.show()
         return fig
@@ -675,25 +704,45 @@ class IntraEpochMetricsTracker:
             sort_by_metric = self.performance_eval_params["metric_used"]
         best_indices = self.get_indices_of_best_n_runs(n=show_n_best_runs, sort_by=sort_by_metric)
 
+        stupid_way_of_showing_no_duplicates_in_legend = []
         for idx in best_indices:
             run = self.crossval_runs[idx]
             if color_by_hyperparameter is not None:
                 hyperparams = list(self.full_metric_performance_df[color_by_hyperparameter].unique())
                 color = color_cycle[hyperparams.index(run.parameters[color_by_hyperparameter])]
-                name = f": {color_by_hyperparameter}: {run.parameters[color_by_hyperparameter]}"
+                name = f"{run.parameters[color_by_hyperparameter]}"
             else:
                 color = run.color
                 # name = str({k: v for k, v in run.parameters.items() if k in varied_hyperparameters})
                 name = self.get_only_varied_hyperparams(run.parameters)
 
+            if name in stupid_way_of_showing_no_duplicates_in_legend:
+                showlegend = False
+            else:
+                showlegend = True
+                stupid_way_of_showing_no_duplicates_in_legend.append(name)
+
             temp = df[df["combined_params"] == str(run.parameters)]
             fig.add_trace(go.Box(y=temp[metric], boxmean=True, x=[metric] * len(temp), name=name,
-                                 jitter=0.3, pointpos=-0, boxpoints='all', marker_color=f"rgba{black}",
-                                 line_color=f"rgba{color}")
+                                 jitter=0.3, pointpos=-0, boxpoints='all',
+                                 legendgroup=name,
+                                 showlegend=showlegend,
+                                 marker_color=f"rgba{black}",
+                                 line_color=f"rgba{color}",
+                                 )
                           )
 
-        fig.update_layout(width=1300, height=600, margin=dict(l=150, r=20, t=10, b=20), boxmode='group',
-                          legend={"orientation": 'h'})
+        fig.update_layout(width=1600, height=600,
+                          margin=dict(l=20, r=20, t=20, b=20),
+                          boxmode='group',
+                          legend=dict(title=dict(text=f"Hyperparameter {color_by_hyperparameter}: "),
+                                      orientation='h',
+                                      x=0.5, y=1.1,
+                                      xanchor='center',
+                                      yanchor='top'),
+                          boxgap=0.0,
+                          boxgroupgap=0.1
+                          )
         return fig
 
     def boxplot_run_statistics_grouped(self, metric, show_n_best_runs="all", group_by_hyperparameter=None,
@@ -750,7 +799,7 @@ class IntraEpochMetricsTracker:
                                  legendgroup=group_offset_name,
                                  text=group_offset_name,
                                  hoverinfo="y+text",
-                                 # jitter=0.01,
+                                 jitter=0.3,
                                  pointpos=0.0,
                                  boxpoints='all',
                                  marker_color=f"rgba{black}",
@@ -758,8 +807,8 @@ class IntraEpochMetricsTracker:
                                  showlegend=True)
                           )
 
-        fig.update_layout(width=1300, height=600,
-                          margin=dict(l=150, r=20, t=10, b=20),
+        fig.update_layout(width=1600, height=600,
+                          margin=dict(l=20, r=20, t=20, b=20),
                           boxmode='group',
                           legend={"orientation": 'h'},
                           boxgap=0.3,
@@ -825,11 +874,11 @@ class IntraEpochMetricsTracker:
                                  showlegend=showlegend)
                           )
         num_groups = len(self.get_unique_parameter_combinations(separate_param))
-        for i in range(num_groups-1):
-            fig.add_vline(x=i+0.5, line_width=1, line_dash="dash", line_color="black")
+        for i in range(num_groups - 1):
+            fig.add_vline(x=i + 0.5, line_width=1, line_dash="dash", line_color="black")
 
         fig.update_layout(width=1600, height=600,
-                          margin=dict(l=150, r=20, t=10, b=20),
+                          margin=dict(l=20, r=20, t=20, b=20),
                           boxmode='group',
                           legend=dict(title=dict(text=f"Hyperparameter {separate_param}: "),
                                       orientation='h',
@@ -862,10 +911,12 @@ class IntraEpochMetricsTracker:
 
         run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing, name=name,
                           show_separate_folds=show_separate_folds, fig=fig, show_std_area_plot=show_std_area_plot)
-        fig.update_layout(autosize=False, width=1300, height=600, showlegend=True,
-                          margin=dict(l=20, r=20, t=50, b=20),
+        fig.update_layout(autosize=False, width=1600, height=600, showlegend=True,
+                          margin=dict(l=20, r=20, t=20, b=20),
                           title_text=f"<b>{mode} - {metric}</b>", title_x=0.3, title_y=0.97, titlefont=dict(size=24),
-                          legend={"orientation": 'h'})
+                          legend={"orientation": 'h'},
+                          yaxis_range=ylimit_dict[metric]
+                          )
         # fig.show()
         return fig
 

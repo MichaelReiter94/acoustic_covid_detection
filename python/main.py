@@ -395,7 +395,7 @@ def get_data_loaders(training_set, validation_set, params):
     # create dataloaders
     n_workers = 1
     if cuda.is_available():
-        n_workers = 2
+        n_workers = 4
     if params.weighted_sampler:
         train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler,
                            num_workers=n_workers)
@@ -511,61 +511,61 @@ if __name__ == "__main__":
     USE_MIL = False
     SAMPLES_PER_EPOCH = 1024
 
-    n_epochs = 200
+    n_epochs = 250
     n_cross_validation_runs = 1
 
+    parameters = dict(
+        # rand=random_seeds[:n_cross_validation_runs],
+        batch=[64],
+        lr=[8e-4, 5e-4, 1e-4, 8e-5],  # lr of the output layer - the lr between in/output layer are linearly interpolated
+        wd=[1e-4],  # weight decay regularization
+        lr_decay=[0.985],
+        mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
+        mixup_p=[0.8],  # probability of mix up being used at all
+        use_augm_datasets=[False],
+        shift=[True],
+        sigma=[0.2],
+        weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
+        class_weight=[1],  # factor for loss of the positive class to address class imbalance
+        bag_size=[8],
+        n_MIL_Neurons=[64],
+        time_steps=[100, 200, 400],
+        lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
+        resnet_dropout=[False, True],
+        focal_loss=[0],
+        # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
+        # If you go below, it learns more from well classified examples and comparably ignores more badly classified ones
+        min_quality=[1]
+        # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
+        # quality "0" is usually already removed when creating the feature set to save memory
+    )
+    #
     # parameters = dict(
     #     # rand=random_seeds[:n_cross_validation_runs],
     #     batch=[64],
-    #     lr=[8e-4, 5e-4, 1e-4, 8e-5],  # lr of the output layer - the lr between in/output layer are linearly interpolated
+    #     lr=[1e-5, 5e-5, 8e-5],  # lr of the output layer - the lr between in/output layer are linearly interpolated
     #     wd=[1e-4],  # weight decay regularization
     #     lr_decay=[0.985],
     #     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
     #     mixup_p=[0.8],  # probability of mix up being used at all
     #     use_augm_datasets=[False],
     #     shift=[True],
-    #     sigma=[0.2],
+    #     sigma=[0.1],
     #     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
     #     class_weight=[1],  # factor for loss of the positive class to address class imbalance
-    #     bag_size=[8],
+    #     bag_size=[6],
     #     n_MIL_Neurons=[64],
-    #     time_steps=[100, 200, 400],
+    #     time_steps=[120],
     #     lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
-    #     resnet_dropout=[False, True],
+    #     resnet_dropout=[True, False],
     #     focal_loss=[0],
     #     # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
-    #     # If you go below, it learns more from well classified examples and comparably ignores more badly classified ones
+    #     # If you go below,it learns more from well classified examples and comparably ignores more badly classified ones
     #     min_quality=[1]
     #     # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
     #     # quality "0" is usually already removed when creating the feature set to save memory
+    #
     # )
-
-    parameters = dict(
-        # rand=random_seeds[:n_cross_validation_runs],
-        batch=[64],
-        lr=[0.0005],  # lr of the output layer - the lr between in/output layer are linearly interpolated
-        wd=[1e-4],  # weight decay regularization
-        lr_decay=[0.985],
-        mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
-        mixup_p=[0.8],  # probability of mix up being used at all
-        use_augm_datasets=[True],
-        shift=[True],
-        sigma=[0.1],
-        weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
-        class_weight=[1],  # factor for loss of the positive class to address class imbalance
-        bag_size=[6],
-        n_MIL_Neurons=[64],
-        time_steps=[100],
-        lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
-        resnet_dropout=[True],
-        focal_loss=[0],
-        # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
-        # If you go below,it learns more from well classified examples and comparably ignores more badly classified ones
-        min_quality=[2]
-        # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
-        # quality "0" is usually already removed when creating the feature set to save memory
-
-    )
 
     transforms = None
     augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift(), TransferFunctionSim()])
@@ -579,7 +579,6 @@ if __name__ == "__main__":
     # logmel_1_channel, 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new,mfccs_3s_breathing_deep
     # mfccs_3s_combined_coughs, logmel_3s_combined_coughs, mfcc_mil_combined_cough, resnet_mil_combined_cough
     # mfcc_vowel_a_6s_FFT2048_fmax5500, mfcc_vowel_e_6s_FFT2048_fmax5500, mfcc_vowels_combined_6s_FFT2048_fmax5500
-
     # logmel_combined_breaths_NEW_06msHop_46msFFT_fmax11000_224logmel
     # logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel
     # logmel_combined_breaths_NEW_11msHop_92msFFT_fmax11000_224logmel
@@ -588,7 +587,7 @@ if __name__ == "__main__":
     # logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel
     # logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel
     # logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel
-    DATASET_NAME = "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel"
+    DATASET_NAME = "logmel_combined_breaths_NEW_06msHop_46msFFT_fmax11000_224logmel"
     RUN_COMMENT = f"baseline_hyperparams"
 
     print(f"Dataset used: {DATASET_NAME}")
