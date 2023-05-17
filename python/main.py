@@ -30,7 +30,8 @@ dataset_collection = {
     "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_05_11_logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": []
+        "augmented_files": ["2023_05_15_logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmelaugmented"
+                            ".pickle"]
     },
     "logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
@@ -394,7 +395,7 @@ def get_data_loaders(training_set, validation_set, params):
     # create dataloaders
     n_workers = 1
     if cuda.is_available():
-        n_workers = 0
+        n_workers = 2
     if params.weighted_sampler:
         train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler,
                            num_workers=n_workers)
@@ -507,8 +508,8 @@ if __name__ == "__main__":
     # ###############################################  manual setup  ###################################################
     USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
     QUICK_TRAIN_FOR_TESTS = False
-    USE_MIL = True
-    SAMPLES_PER_EPOCH = 512
+    USE_MIL = False
+    SAMPLES_PER_EPOCH = 1024
 
     n_epochs = 200
     n_cross_validation_runs = 1
@@ -516,7 +517,7 @@ if __name__ == "__main__":
     # parameters = dict(
     #     # rand=random_seeds[:n_cross_validation_runs],
     #     batch=[64],
-    #     lr=[8e-4, 5e-4, 1e-4, 8e-3],  # lr of the output layer - the lr between in/output layer are linearly interpolated
+    #     lr=[8e-4, 5e-4, 1e-4, 8e-5],  # lr of the output layer - the lr between in/output layer are linearly interpolated
     #     wd=[1e-4],  # weight decay regularization
     #     lr_decay=[0.985],
     #     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
@@ -541,26 +542,26 @@ if __name__ == "__main__":
 
     parameters = dict(
         # rand=random_seeds[:n_cross_validation_runs],
-        batch=[16],
-        lr=[3e-3],  # lr of the output layer - the lr between in/output layer are linearly interpolated
+        batch=[64],
+        lr=[0.0005],  # lr of the output layer - the lr between in/output layer are linearly interpolated
         wd=[1e-4],  # weight decay regularization
-        lr_decay=[0.97],
+        lr_decay=[0.985],
         mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
         mixup_p=[0.8],  # probability of mix up being used at all
-        use_augm_datasets=[False],
+        use_augm_datasets=[True],
         shift=[True],
         sigma=[0.1],
         weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
         class_weight=[1],  # factor for loss of the positive class to address class imbalance
         bag_size=[6],
         n_MIL_Neurons=[64],
-        time_steps=[112],
+        time_steps=[100],
         lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
         resnet_dropout=[True],
         focal_loss=[0],
         # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
         # If you go below,it learns more from well classified examples and comparably ignores more badly classified ones
-        min_quality=[1]
+        min_quality=[2]
         # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
         # quality "0" is usually already removed when creating the feature set to save memory
 
@@ -587,7 +588,7 @@ if __name__ == "__main__":
     # logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel
     # logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel
     # logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel
-    DATASET_NAME = "logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel"
+    DATASET_NAME = "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel"
     RUN_COMMENT = f"baseline_hyperparams"
 
     print(f"Dataset used: {DATASET_NAME}")
