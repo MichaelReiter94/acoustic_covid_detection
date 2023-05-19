@@ -83,6 +83,7 @@ ylimit_dict = {"auc_roc": [0.5, 1.0],
                "fnr": [0.0, 0.5],
                }
 
+
 def pretty_print_dict(dictionary):
     for k, v in dictionary.items():
         offset = 30 - len(k)
@@ -272,7 +273,7 @@ class CrossValRuns:
                 self.best_performance_std[mode][metric] = np.nanstd(self.best_performances[mode][metric])
 
     def plot_mean_run(self, mode, metric, n_samples_for_smoothing=1, show_separate_folds=False,
-                      show_std_area_plot=True, fig=None, color=None, name=None, showlegend=True):
+                      show_std_area_plot=True, fig=None, color=None, name=None, showlegend=True, hovertext=""):
         # note, that neither mean nor std of the cross validation is calculated from smoothed curves of the folds, but
         # it is rather smoothed AFTER calculations. This results usually (always?) in a higher std
         if color is None:
@@ -308,7 +309,11 @@ class CrossValRuns:
                                  name=name,
                                  legendgroup=name,
                                  showlegend=showlegend,
-                                 line=dict(color=rgba_plotly(color))))
+                                 line=dict(color=rgba_plotly(color)),
+                                 text=hovertext,
+                                 hoverinfo="y+text"
+                                 )
+                      )
         return fig
 
     def area_plot(self, upper_bound, lower_bound, figure=None, x_axis=None, color=None):
@@ -657,16 +662,18 @@ class IntraEpochMetricsTracker:
                     # name = str(run.parameters)
                     name = self.get_only_varied_hyperparams(run.parameters)
 
-                if name in stupid_way_of_showing_no_duplicates_in_legend:
+                if name in stupid_way_of_showing_no_duplicates_in_legend or color_by_hyperparameter is None:
                     showlegend = False
                 else:
                     showlegend = True
                     stupid_way_of_showing_no_duplicates_in_legend.append(name)
-
+                hovertext = dict(run.parameters)
+                hovertext = self.get_only_varied_hyperparams(hovertext).replace("{", "").replace("}", "")
+                hovertext = hovertext.replace(", ", "<br>")
                 run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing,
                                   show_separate_folds=show_separate_folds, fig=fig,
                                   show_std_area_plot=show_std_area_plot, color=color, name=name,
-                                  showlegend=showlegend
+                                  showlegend=showlegend, hovertext=hovertext
                                   )
         # metrics_to_minimize = ("loss", "fpr", "fnr")
         # metrics_to_maximize = (
@@ -705,8 +712,10 @@ class IntraEpochMetricsTracker:
         best_indices = self.get_indices_of_best_n_runs(n=show_n_best_runs, sort_by=sort_by_metric)
 
         stupid_way_of_showing_no_duplicates_in_legend = []
+
         for idx in best_indices:
             run = self.crossval_runs[idx]
+            hovertext = self.get_only_varied_hyperparams(run.parameters).replace("{", "").replace("}", "")
             if color_by_hyperparameter is not None:
                 hyperparams = list(self.full_metric_performance_df[color_by_hyperparameter].unique())
                 color = color_cycle[hyperparams.index(run.parameters[color_by_hyperparameter])]
@@ -714,14 +723,15 @@ class IntraEpochMetricsTracker:
             else:
                 color = run.color
                 # name = str({k: v for k, v in run.parameters.items() if k in varied_hyperparameters})
-                name = self.get_only_varied_hyperparams(run.parameters)
+                name = hovertext
 
-            if name in stupid_way_of_showing_no_duplicates_in_legend:
+            if name in stupid_way_of_showing_no_duplicates_in_legend or color_by_hyperparameter is None:
                 showlegend = False
             else:
                 showlegend = True
                 stupid_way_of_showing_no_duplicates_in_legend.append(name)
 
+            hovertext = hovertext.replace(", ", "<br>")
             temp = df[df["combined_params"] == str(run.parameters)]
             fig.add_trace(go.Box(y=temp[metric], boxmean=True, x=[metric] * len(temp), name=name,
                                  jitter=0.3, pointpos=-0, boxpoints='all',
@@ -729,6 +739,8 @@ class IntraEpochMetricsTracker:
                                  showlegend=showlegend,
                                  marker_color=f"rgba{black}",
                                  line_color=f"rgba{color}",
+                                 text=hovertext,
+                                 hoverinfo="y+text",
                                  )
                           )
 
@@ -843,8 +855,10 @@ class IntraEpochMetricsTracker:
             run = self.crossval_runs[idx]
 
             group_name = dict(run.parameters)
+            # hovertext = self.get_only_varied_hyperparams(group_name).replace("{", "").replace("}", ""),
             del group_name[separate_param]
             group_name = self.get_only_varied_hyperparams(group_name).replace("{", "").replace("}", "")
+            group_name = group_name.replace(", ", "<br>")
 
             group_offset_name = str(run.parameters[separate_param])
             color = color_cycle[unique_combinations.index(str(group_offset_name))]
@@ -855,7 +869,6 @@ class IntraEpochMetricsTracker:
                 showlegend = True
                 stupid_way_of_showing_no_duplicates_in_legend.append(group_offset_name)
 
-            group_name = group_name.replace(", ", "<br>")
             temp = df[df["combined_params"] == str(run.parameters)]
             fig.add_trace(go.Box(y=temp[metric], boxmean=True,
                                  # x=[group_name] * len(temp),
@@ -864,7 +877,7 @@ class IntraEpochMetricsTracker:
                                  offsetgroup=group_offset_name,
                                  name=group_offset_name,
                                  legendgroup=group_offset_name,
-                                 text=group_offset_name,
+                                 text=group_name,
                                  hoverinfo="y+text",
                                  # jitter=0.01,
                                  pointpos=0.0,
@@ -908,9 +921,12 @@ class IntraEpochMetricsTracker:
         run_idx = self.run_ids.index(run_id)
         run = self.crossval_runs[run_idx]
         name = self.get_only_varied_hyperparams(run.parameters)
-
+        hovertext = dict(run.parameters)
+        hovertext = self.get_only_varied_hyperparams(hovertext).replace("{", "").replace("}", "")
+        hovertext = hovertext.replace(", ", "<br>")
         run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing, name=name,
-                          show_separate_folds=show_separate_folds, fig=fig, show_std_area_plot=show_std_area_plot)
+                          show_separate_folds=show_separate_folds, fig=fig, show_std_area_plot=show_std_area_plot,
+                          hovertext=hovertext)
         fig.update_layout(autosize=False, width=1600, height=600, showlegend=True,
                           margin=dict(l=20, r=20, t=20, b=20),
                           title_text=f"<b>{mode} - {metric}</b>", title_x=0.3, title_y=0.97, titlefont=dict(size=24),

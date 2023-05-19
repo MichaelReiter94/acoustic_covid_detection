@@ -421,11 +421,11 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons).to(device)
     elif model_name == "Resnet18_MIL":
         _, _, F, T = train_set.get_input_shape()
-        my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons, add_dropouts=p.resnet_dropout,
+        my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons, dropout_p=p.dropout_p,
                                           F=F, T=T).to(device)
     elif model_name == "resnet18":
         _, F, T = train_set.get_input_shape()
-        my_model = model_dict[model_name](add_dropouts=p.resnet_dropout, FREQUNCY_BINS=F, TIMESTEPS=T).to(device)
+        my_model = model_dict[model_name](dropout_p=p.dropout_p, FREQUNCY_BINS=F, TIMESTEPS=T).to(device)
     else:
         my_model = model_dict[model_name]().to(device)
 
@@ -511,61 +511,61 @@ if __name__ == "__main__":
     USE_MIL = False
     SAMPLES_PER_EPOCH = 1024
 
-    n_epochs = 250
+    n_epochs = 100
     n_cross_validation_runs = 1
 
-    parameters = dict(
-        # rand=random_seeds[:n_cross_validation_runs],
-        batch=[64],
-        lr=[8e-4, 5e-4, 1e-4, 8e-5],  # lr of the output layer - the lr between in/output layer are linearly interpolated
-        wd=[1e-4],  # weight decay regularization
-        lr_decay=[0.985],
-        mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
-        mixup_p=[0.8],  # probability of mix up being used at all
-        use_augm_datasets=[False],
-        shift=[True],
-        sigma=[0.2],
-        weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
-        class_weight=[1],  # factor for loss of the positive class to address class imbalance
-        bag_size=[8],
-        n_MIL_Neurons=[64],
-        time_steps=[100, 200, 400],
-        lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
-        resnet_dropout=[False, True],
-        focal_loss=[0],
-        # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
-        # If you go below, it learns more from well classified examples and comparably ignores more badly classified ones
-        min_quality=[1]
-        # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
-        # quality "0" is usually already removed when creating the feature set to save memory
-    )
-    #
     # parameters = dict(
     #     # rand=random_seeds[:n_cross_validation_runs],
     #     batch=[64],
-    #     lr=[1e-5, 5e-5, 8e-5],  # lr of the output layer - the lr between in/output layer are linearly interpolated
+    #     lr=[8e-4, 5e-4, 1e-4, 8e-5],  # lr of the output layer-the lr between in/output layer are linearly interpolated
     #     wd=[1e-4],  # weight decay regularization
     #     lr_decay=[0.985],
     #     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
     #     mixup_p=[0.8],  # probability of mix up being used at all
     #     use_augm_datasets=[False],
     #     shift=[True],
-    #     sigma=[0.1],
+    #     sigma=[0.2],
     #     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
     #     class_weight=[1],  # factor for loss of the positive class to address class imbalance
-    #     bag_size=[6],
+    #     bag_size=[8],
     #     n_MIL_Neurons=[64],
-    #     time_steps=[120],
+    #     time_steps=[100, 200, 400],
     #     lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
-    #     resnet_dropout=[True, False],
+    #     dropout_p=[0.0, 0.2],
     #     focal_loss=[0],
     #     # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
-    #     # If you go below,it learns more from well classified examples and comparably ignores more badly classified ones
+    #     # If you go below, it learns more from well classified examples and ignores more badly classified ones
     #     min_quality=[1]
     #     # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
     #     # quality "0" is usually already removed when creating the feature set to save memory
-    #
     # )
+
+    parameters = dict(
+        # rand=random_seeds[:n_cross_validation_runs],
+        batch=[64],
+        lr=[7e-4],  # lr of the output layer - the lr between in/output layer are linearly interpolated
+        wd=[1e-4],  # weight decay regularization
+        lr_decay=[0.98],
+        mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
+        mixup_p=[0.8],  # probability of mix up being used at all
+        use_augm_datasets=[True],
+        shift=[True],
+        sigma=[0.1],
+        weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
+        class_weight=[1],  # factor for loss of the positive class to address class imbalance
+        bag_size=[6],
+        n_MIL_Neurons=[64],
+        time_steps=[120],
+        lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
+        dropout_p=[0.1],
+        focal_loss=[0],
+        # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
+        # If you go below,it learns more from well classified examples and ignores more badly classified ones
+        min_quality=[1]
+        # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
+        # quality "0" is usually already removed when creating the feature set to save memory
+
+    )
 
     transforms = None
     augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift(), TransferFunctionSim()])
@@ -587,8 +587,8 @@ if __name__ == "__main__":
     # logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel
     # logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel
     # logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel
-    DATASET_NAME = "logmel_combined_breaths_NEW_06msHop_46msFFT_fmax11000_224logmel"
-    RUN_COMMENT = f"baseline_hyperparams"
+    DATASET_NAME = "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel"
+    RUN_COMMENT = f"variable_dropoutProbability10p"
 
     print(f"Dataset used: {DATASET_NAME}")
     print(f"model used: {MODEL_NAME}")

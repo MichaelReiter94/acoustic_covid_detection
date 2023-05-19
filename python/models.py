@@ -285,7 +285,7 @@ class BrogrammersSequentialModel(nn.Module):
         return prediction
 
 
-def get_resnet18(add_dropouts=False, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1):
+def get_resnet18(dropout_p=False, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1):
     my_model = resnet18(weights=ResNet18_Weights.DEFAULT)
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
 
@@ -338,12 +338,12 @@ def get_resnet18(add_dropouts=False, add_residual_layers=False, FREQUNCY_BINS=22
                 counter += 1
 
     ############################  add dropouts (spatial and regular) to resnet  ################################
-    if add_dropouts:
-        my_model.layer1 = nn.Sequential(*my_model.layer1, nn.Dropout2d(p=0.2))
-        my_model.layer2 = nn.Sequential(*my_model.layer2, nn.Dropout2d(p=0.3))
-        my_model.layer3 = nn.Sequential(*my_model.layer3, nn.Dropout2d(p=0.4))
-        my_model.layer4 = nn.Sequential(*my_model.layer4, nn.Dropout2d(p=0.5))
-        my_model.avgpool = nn.Sequential(my_model.avgpool, nn.Dropout(p=0.5))
+    if dropout_p > 0:
+        my_model.layer1 = nn.Sequential(*my_model.layer1, nn.Dropout2d(p=dropout_p))
+        my_model.layer2 = nn.Sequential(*my_model.layer2, nn.Dropout2d(p=dropout_p))
+        my_model.layer3 = nn.Sequential(*my_model.layer3, nn.Dropout2d(p=dropout_p))
+        my_model.layer4 = nn.Sequential(*my_model.layer4, nn.Dropout2d(p=dropout_p))
+        my_model.avgpool = nn.Sequential(my_model.avgpool, nn.Dropout(p=dropout_p))
 
     n_features = my_model.fc.in_features
     my_model.fc = nn.Linear(n_features, 1)
