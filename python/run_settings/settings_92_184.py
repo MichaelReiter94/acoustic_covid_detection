@@ -1,0 +1,30 @@
+parameters = dict(
+    batch=[64],
+    lr=[2e-3, 7e-4, 3e-4, 8e-5],
+    wd=[1e-4],
+    lr_decay=[0.99, 0.97],
+    mixup_a=[0.2],
+    mixup_p=[0.8],
+    use_augm_datasets=[True, False],
+    shift=[True],
+    sigma=[0.2],
+    weighted_sampler=[True],
+    class_weight=[1],
+    bag_size=[8],
+    n_MIL_Neurons=[64],
+    time_steps=[150],
+    lr_in=[None],
+    dropout_p=[0.0, 0.15, 0.3],
+    focal_loss=[0],
+    min_quality=[1, 2]
+)
+DATASET_NAME = "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel"
+RUN_COMMENT = f""
+n_epochs = 350
+n_cross_validation_runs = 1
+USE_MIL = False
+MODEL_NAME = "resnet18"
+
+USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
+QUICK_TRAIN_FOR_TESTS = False
+SAMPLES_PER_EPOCH = 1024

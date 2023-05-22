@@ -216,7 +216,6 @@ class FeatureSet:
         return len(self.participants)
 
 
-
 time_domain_augmentations = Compose([
     AddGaussianNoise(min_amplitude=0.0003, max_amplitude=0.01, p=0.8),
     PitchShift(min_semitones=-2, max_semitones=2, p=0.8),
@@ -231,15 +230,15 @@ combined_recordings = {
     "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"]
 }
 # for fs=22kHz: 256 samples ~= 11ms, 512 samples ~= 23ms,
-# 1024 samples ~= 46ms, 1024 samples ~= 46ms , 2048 samples ~= 92ms
+# 1024 samples ~= 46ms, 2048 samples ~= 92ms
 audio_parameters = dict(
     type_of_features="logmel",  # logmel | mfcc
     n_time_steps=224,  # 259 | 224
     n_features=224,  # 15 | 224
     sample_rate=22050,
     n_fft=512 * 16,
-    window_length=2048*2,
-    hop_size=2048,
+    window_length=2048,
+    hop_size=1024,
     fmin=0,
     fmax=22050 // 2
 )
@@ -247,5 +246,5 @@ audio_parameters = dict(
 if __name__ == "__main__":
     feature_set = FeatureSet("combined_breaths", audio_parameters)
     feature_set.create_participant_objects(augmentations=time_domain_augmentations,
-                                           augmentations_per_label=(1, 7))
-    feature_set.save_to("NEW_92msHop_184msFFT_fmax11000_224logmel")
+                                           augmentations_per_label=(1, 4))
+    feature_set.save_to("NEW_46msHop_92msFFT_fmax11000_224logmel")

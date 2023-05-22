@@ -25,7 +25,9 @@ import tkinter as tk
 from tkinter.messagebox import askyesno
 from torch import cuda
 from utils.utils import FocalLoss
+import sys
 
+# <editor-fold desc="#########################  SETTIGNS AND CONSTANTS and constants #################################">
 dataset_collection = {
     "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
@@ -179,8 +181,56 @@ dataset_collection = {
 device = "cuda" if cuda.is_available() else "cpu"
 TESTING_MODE = not cuda.is_available()
 
+# if the script was called with one of those arguments, it will overwrite the settings (hyperparams, dataset etc) with
+# values from the imported file
+if len(sys.argv) > 1:
+    argument = sys.argv[1]
+    if argument == "settings_11_46":
+        from run_settings.settings_11_46 import *
+    elif argument == "settings_23_46":
+        from run_settings.settings_23_46 import *
+    elif argument == "settings_92_184":
+        from run_settings.settings_92_184 import *
+    else:
+        print("Invalid argument!")
+        sys.exit(1)
+else:
+    print("No argument provided. Using Default Settings!")
+    from run_settings.settings import *
 
-# <editor-fold desc="function definitions">
+if MODEL_NAME == "resnet18" and USE_MIL:
+    MODEL_NAME = "Resnet18_MIL"
+elif MODEL_NAME == "brogrammers" and USE_MIL:
+    MODEL_NAME = "MIL_brogrammers"
+
+print(f"Dataset used: {DATASET_NAME}")
+print(f"model used: {MODEL_NAME}")
+
+date = datetime.today().strftime("%Y-%m-%d")
+RUN_NAME = f"{date}_{MODEL_NAME}_{DATASET_NAME}_{RUN_COMMENT}"
+VERBOSE = True
+LOAD_FROM_DISC = False
+SAVE_TO_DISC = False
+
+if device == "cpu":
+    window = tk.Tk()
+    TRACK_METRICS = askyesno(title='Tracking Settings',
+                             message=f'Do you want to track this run?\nIt will be saved as: {RUN_NAME}')
+    window.destroy()
+else:
+    TRACK_METRICS = True
+
+transforms = None
+augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift(), TransferFunctionSim()])
+
+random_seeds = [99468865, 215674, 3213213211, 55555555, 66445511337,
+                316497938271, 161094, 191919191, 101010107, 123587955]
+# random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
+#                 66445511337, 316497938271, 161094, 191919191, 101010107]
+# first seed (123587955) has a very difficult/bad performing validation set
+# </editor-fold>
+
+# <editor-fold desc="#################################  FUNCTION DEFINITIONS   #######################################">
 
 def get_parameter_groups(model, output_lr, input_lr, weight_decay=1e-4, verbose=True):
     # applies different learning rates for each (parent) layer in the model (for finetuning a pretrained network).
@@ -393,7 +443,7 @@ def get_data_loaders(training_set, validation_set, params):
     sampler = WeightedRandomSampler(sample_weights, num_samples=SAMPLES_PER_EPOCH, replacement=True)
 
     # create dataloaders
-    n_workers = 1
+    n_workers = 0
     if cuda.is_available():
         n_workers = 4
     if params.weighted_sampler:
@@ -497,120 +547,14 @@ def get_online_augmentations(run_parameters):
 
 # </editor-fold>
 
-random_seeds = [99468865, 215674, 3213213211, 55555555, 66445511337,
-                316497938271, 161094, 191919191, 101010107, 123587955]
-# random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
-#                 66445511337, 316497938271, 161094, 191919191, 101010107]
-# first seed (123587955) has a very difficult/bad performing validation set
 
 if __name__ == "__main__":
     summarize_cuda_memory_usage(summarize_device=True)
-    # ###############################################  manual setup  ###################################################
-    USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
-    QUICK_TRAIN_FOR_TESTS = False
-    USE_MIL = False
-    SAMPLES_PER_EPOCH = 1024
-
-    n_epochs = 100
-    n_cross_validation_runs = 1
-
-    # parameters = dict(
-    #     # rand=random_seeds[:n_cross_validation_runs],
-    #     batch=[64],
-    #     lr=[8e-4, 5e-4, 1e-4, 8e-5],  # lr of the output layer-the lr between in/output layer are linearly interpolated
-    #     wd=[1e-4],  # weight decay regularization
-    #     lr_decay=[0.985],
-    #     mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
-    #     mixup_p=[0.8],  # probability of mix up being used at all
-    #     use_augm_datasets=[False],
-    #     shift=[True],
-    #     sigma=[0.2],
-    #     weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
-    #     class_weight=[1],  # factor for loss of the positive class to address class imbalance
-    #     bag_size=[8],
-    #     n_MIL_Neurons=[64],
-    #     time_steps=[100, 200, 400],
-    #     lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
-    #     dropout_p=[0.0, 0.2],
-    #     focal_loss=[0],
-    #     # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
-    #     # If you go below, it learns more from well classified examples and ignores more badly classified ones
-    #     min_quality=[1]
-    #     # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
-    #     # quality "0" is usually already removed when creating the feature set to save memory
-    # )
-
-    parameters = dict(
-        # rand=random_seeds[:n_cross_validation_runs],
-        batch=[64],
-        lr=[7e-4],  # lr of the output layer - the lr between in/output layer are linearly interpolated
-        wd=[1e-4],  # weight decay regularization
-        lr_decay=[0.98],
-        mixup_a=[0.2],  # alpha value to decide probability distribution of how much of each of the samples is used
-        mixup_p=[0.8],  # probability of mix up being used at all
-        use_augm_datasets=[True],
-        shift=[True],
-        sigma=[0.1],
-        weighted_sampler=[True],  # whether to use a weighted random sampler to address the class imbalance
-        class_weight=[1],  # factor for loss of the positive class to address class imbalance
-        bag_size=[6],
-        n_MIL_Neurons=[64],
-        time_steps=[120],
-        lr_in=[None],  # lr of the input layer - the lr between in/output layer are linearly interpolated
-        dropout_p=[0.1],
-        focal_loss=[0],
-        # if focal_loss (gamma) == 0 it is the same as the BCE, increasing it makes it focus on harder examples.
-        # If you go below,it learns more from well classified examples and ignores more badly classified ones
-        min_quality=[1]
-        # audio quality is divided into 3 classes "0" being ba audio, "1" being medium and "2" premium quality.
-        # quality "0" is usually already removed when creating the feature set to save memory
-
-    )
-
-    transforms = None
-    augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift(), TransferFunctionSim()])
-
-    # "brogrammers", "resnet18", "resnet50", MIL_brogrammers, Resnet18_MIL, PredictionLevelMIL_mfcc
-    MODEL_NAME = "resnet18"
-    if MODEL_NAME == "resnet18" and USE_MIL:
-        MODEL_NAME = "Resnet18_MIL"
-    elif MODEL_NAME == "brogrammers" and USE_MIL:
-        MODEL_NAME = "MIL_brogrammers"
-    # logmel_1_channel, 15_mfccs, 15_mfccs_highRes, 15_mfccs_highres_new, brogrammers_new,mfccs_3s_breathing_deep
-    # mfccs_3s_combined_coughs, logmel_3s_combined_coughs, mfcc_mil_combined_cough, resnet_mil_combined_cough
-    # mfcc_vowel_a_6s_FFT2048_fmax5500, mfcc_vowel_e_6s_FFT2048_fmax5500, mfcc_vowels_combined_6s_FFT2048_fmax5500
-    # logmel_combined_breaths_NEW_06msHop_46msFFT_fmax11000_224logmel
-    # logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel
-    # logmel_combined_breaths_NEW_11msHop_92msFFT_fmax11000_224logmel
-    # logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel
-    # logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel
-    # logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel
-    # logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel
-    # logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel
-    DATASET_NAME = "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel"
-    RUN_COMMENT = f"variable_dropoutProbability10p"
-
-    print(f"Dataset used: {DATASET_NAME}")
-    print(f"model used: {MODEL_NAME}")
-    date = datetime.today().strftime("%Y-%m-%d")
-    RUN_NAME = f"{date}_{MODEL_NAME}_{DATASET_NAME}_{RUN_COMMENT}"
-    VERBOSE = True
-    LOAD_FROM_DISC = False
-    SAVE_TO_DISC = False
-
-    if device == "cpu":
-        window = tk.Tk()
-        TRACK_METRICS = askyesno(title='Tracking Settings',
-                                 message=f'Do you want to track this run?\nIt will be saved as: {RUN_NAME}')
-        window.destroy()
-    else:
-        TRACK_METRICS = True
-
-    # ############################################ setup ###############################################################
     tracker = IntraEpochMetricsTracker(datasets={DATASET_NAME: dataset_collection[DATASET_NAME]}, verbose=TESTING_MODE)
     for p in get_parameter_combinations(parameters, verbose=True):
         tracker.setup_run_with_new_params(p)
         for random_seed in random_seeds[:n_cross_validation_runs]:
+            # <editor-fold desc="#####################################  SETUP ########################################">
             summarize_cuda_memory_usage()
             tracker.start_run_with_random_seed(random_seed)
             train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
@@ -620,14 +564,9 @@ if __name__ == "__main__":
             train_set.n_timesteps, val_set.n_timesteps = p.time_steps, p.time_steps
             train_set.bag_size = p.bag_size
             val_set.bag_size = p.bag_size
-
             train_set.augmentations = get_online_augmentations(p)
-            # if TRACK_METRICS:
-            #     writer = SummaryWriter(log_dir=f"run/tensorboard_saves/{RUN_NAME}/{p}")
-
             train_loader, eval_loader = get_data_loaders(train_set, val_set, p)
             my_cnn = get_model(MODEL_NAME, p, load_from_disc=LOAD_FROM_DISC, verbose=False)
-
             optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
             lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
             # lr_scheduler = ReduceLROnPlateau(optimizer, patience=10, verbose=False,
@@ -635,7 +574,6 @@ if __name__ == "__main__":
             loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight]), reduction='mean').to(device)
             # loss_func = FocalLoss(gamma=p.focal_loss, pos_weight=p.class_weight, reduction='mean',
             #                       exclude_outliers=1).to(device)
-            # loss_func = nn.BCEWithLogitsLoss().to(device)
             tracker.save_model_and_training_parameters(my_cnn, optimizer, loss_func)
             tracker.types_of_recording = train_set.types_of_recording
             tracker.audio_processing_params = train_set.audio_proc_params
@@ -643,10 +581,8 @@ if __name__ == "__main__":
             tracker.augmentations_per_label = train_set.augmentations_per_label
             tracker.train_set_label_counts = f"label '0': {train_set.label_counts()[1][0]}  -  " \
                                              f"label '1': {train_set.label_counts()[1][1]}"
-
-            # , train_set.audio_proc_params, train_set.predetermined_augmentations
-            # ################################################ training ################################################
             epoch_start = time.time()
+            # </editor-fold>
             for epoch in range(n_epochs):
                 tracker.reset(p, mode="train")
                 for i, batch in enumerate(train_loader):
@@ -659,18 +595,12 @@ if __name__ == "__main__":
                     epoch_loss_val = write_metrics(mode="eval")
                 if isinstance(lr_scheduler, ReduceLROnPlateau):
                     lr_scheduler.step(epoch_loss_train)
-                    # print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
-                    #       f" --> {round(lr_scheduler._last_lr[-1], 8)}")
-                    # print(optimizer.param_groups[0]['lr'])
                 else:
                     lr_scheduler.step()
-                    # print(f"current learning rates: {[round(lr, 8) for lr in lr_scheduler.get_last_lr()]}")
-                    # print(f"current learning rates: {round(lr_scheduler.get_last_lr()[0], 8)} "
-                    #       f" --> {round(lr_scheduler.get_last_lr()[-1], 8)}")
                 if TESTING_MODE:
                     print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
                           f" --> {round(lr_scheduler._last_lr[-1], 8)}")
-            # ##########################################################################################################
+            # ####################################################################################
             if VERBOSE:
                 delta_t = time.time() - epoch_start
                 print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
@@ -678,9 +608,6 @@ if __name__ == "__main__":
         if TRACK_METRICS:
             with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
                 pickle.dump(tracker, f)
-
-    # if TRACK_METRICS:
-    #     writer.close()
 
     if SAVE_TO_DISC:
         print("saving new model!")
