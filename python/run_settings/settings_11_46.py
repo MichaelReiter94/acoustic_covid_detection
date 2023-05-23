@@ -1,8 +1,8 @@
 parameters = dict(
     batch=[64],
-    lr=[2e-3, 7e-4, 3e-4, 8e-5],
+    lr=[5e-4, 1e-3],
     wd=[1e-4],
-    lr_decay=[0.99, 0.97],
+    lr_decay=[0.99],
     mixup_a=[0.2],
     mixup_p=[0.8],
     use_augm_datasets=[True, False],
@@ -20,7 +20,7 @@ parameters = dict(
 )
 DATASET_NAME = "logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel"
 RUN_COMMENT = f""
-n_epochs = 350
+n_epochs = 400
 n_cross_validation_runs = 1
 USE_MIL = False
 MODEL_NAME = "resnet18"

@@ -43,8 +43,9 @@ class AudioRecording:
     def __init__(self, data_path, type_of_recording, audio_parameters, augmentations=None):
         combined_recordings = {
             "combined_coughs": ["cough-heavy", "cough-shallow"],
-            "combined_breaths": ["breathing-shallow", "breathing-deep"],
-            "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"]
+            "combined_breaths": ["breathing-deep", "breathing-shallow"],
+            "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"],
+            "combined_speech": ["counting-normal", "counting-fast"]
         }
 
         if type_of_recording in combined_recordings:

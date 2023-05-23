@@ -38,7 +38,8 @@ dataset_collection = {
     "logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_05_11_logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": []
+        "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmelaugmented."
+                            "#pickle"]
     },
     "logmel_combined_breaths_NEW_06msHop_46msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
@@ -48,7 +49,8 @@ dataset_collection = {
     "logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_05_04_logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": []
+        "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmelaugmented."
+                            "pickle"]
     },
     "logmel_combined_breaths_NEW_11msHop_92msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
@@ -58,7 +60,8 @@ dataset_collection = {
     "logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel": {
             "dataset_class": ResnetLogmelDataset,
             "participants_file": "2023_05_02_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
-            "augmented_files": []
+            "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
+                                ".pickle"]
         },
     "logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
@@ -228,6 +231,8 @@ random_seeds = [99468865, 215674, 3213213211, 55555555, 66445511337,
 # random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
 #                 66445511337, 316497938271, 161094, 191919191, 101010107]
 # first seed (123587955) has a very difficult/bad performing validation set
+print(parameters)
+print(DATASET_NAME)
 # </editor-fold>
 
 # <editor-fold desc="#################################  FUNCTION DEFINITIONS   #######################################">
@@ -445,7 +450,7 @@ def get_data_loaders(training_set, validation_set, params):
     # create dataloaders
     n_workers = 0
     if cuda.is_available():
-        n_workers = 4
+        n_workers = 2
     if params.weighted_sampler:
         train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler,
                            num_workers=n_workers)

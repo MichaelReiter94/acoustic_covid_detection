@@ -69,7 +69,8 @@ def contains_only_good_audio(participant_metadata, types_of_recording, ID):
     combined_recordings = {
         "combined_coughs": ["cough-heavy", "cough-shallow"],
         "combined_breaths": ["breathing-deep", "breathing-shallow"],
-        "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"]
+        "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"],
+        "combined_speech": ["counting-normal", "counting-fast"]
     }
 
     # load the manually identified bad ids and see if this ID has an entry for this recording type. Only combined
@@ -227,7 +228,8 @@ all_types_of_recording = ["cough-heavy", "cough-shallow", "breathing-deep", "bre
 combined_recordings = {
     "combined_coughs": ["cough-heavy", "cough-shallow"],
     "combined_breaths": ["breathing-deep", "breathing-shallow"],
-    "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"]
+    "combined_vowels": ["vowel-a", "vowel-e", "vowel-o"],
+    "combined_speech": ["counting-normal", "counting-fast"]
 }
 # for fs=22kHz: 256 samples ~= 11ms, 512 samples ~= 23ms,
 # 1024 samples ~= 46ms, 2048 samples ~= 92ms
@@ -237,14 +239,14 @@ audio_parameters = dict(
     n_features=224,  # 15 | 224
     sample_rate=22050,
     n_fft=512 * 16,
-    window_length=2048,
-    hop_size=1024,
+    window_length=512,
+    hop_size=256,
     fmin=0,
     fmax=22050 // 2
 )
 
 if __name__ == "__main__":
-    feature_set = FeatureSet("combined_breaths", audio_parameters)
+    feature_set = FeatureSet("combined_coughs", audio_parameters)
     feature_set.create_participant_objects(augmentations=time_domain_augmentations,
                                            augmentations_per_label=(1, 4))
-    feature_set.save_to("NEW_46msHop_92msFFT_fmax11000_224logmel")
+    feature_set.save_to("NEW_11msHop_23msFFT_fmax11000_224logmel")
