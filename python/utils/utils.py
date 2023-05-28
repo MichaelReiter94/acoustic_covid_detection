@@ -117,7 +117,7 @@ class FocalLoss(nn.Module):
 
     def _exclude_outliers(self, loss: torch.Tensor):
         n = len(loss)
-        if n > 16:
+        if n >= 16:
             loss, _ = loss.sort()
             loss = loss[:n-self.exclude_n]
         return loss

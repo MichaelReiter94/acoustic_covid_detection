@@ -81,7 +81,6 @@ def contains_only_good_audio(participant_metadata, types_of_recording, ID):
     if ID in manually_identified_bad_ids:
         return False
 
-
     if isinstance(types_of_recording, str):
             types_of_recording = [types_of_recording]
 
@@ -103,8 +102,6 @@ def contains_only_good_audio(participant_metadata, types_of_recording, ID):
         else:
             recording_quality = participant_metadata[f"audio_quality_{rec_type}"].item()
 
-
-
         if recording_quality > 0:
             pass
         else:
@@ -120,7 +117,6 @@ def pretty_print_dict(dictionary):
         line = f"{k}:{offset}{v}"
         return_string = f"{return_string}\n{line}"
     return return_string
-
 
 
 class FeatureSet:

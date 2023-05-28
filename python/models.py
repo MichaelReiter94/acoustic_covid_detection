@@ -285,7 +285,7 @@ class BrogrammersSequentialModel(nn.Module):
         return prediction
 
 
-def get_resnet18(dropout_p=False, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1):
+def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1):
     my_model = resnet18(weights=ResNet18_Weights.DEFAULT)
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
 
@@ -528,17 +528,17 @@ class Resnet18MILOld(nn.Module):
 
 
 class Resnet18MIL(nn.Module):
-    def __init__(self, n_hidden_attention=32, add_dropouts=True, add_residual_layers=False, F=224, T=224, C=1):
+    def __init__(self, n_hidden_attention=32, dropout_p=0.0, add_residual_layers=False, F=224, T=224, C=1):
         super().__init__()
-        self.resnet = get_resnet18(add_dropouts=add_dropouts, add_residual_layers=add_residual_layers,
+        self.resnet = get_resnet18(dropout_p=dropout_p, add_residual_layers=add_residual_layers,
                                    FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C)
         # trim off the last dense layer [512 --> 1] to be able to add the MIL networks in all variations
         self.resnet = torch.nn.Sequential(*(list(self.resnet.children())[:-1]))
-        # self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=0.25)
-        # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=0.25)
-        # self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=0.25)
-        self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention,
-                                                        n_neurons=n_hidden_attention, dropout=0.25)
+        self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=dropout_p)
+        # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p)
+        # self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p)
+        # self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention,
+        #                                                 n_neurons=n_hidden_attention, dropout=dropout_p)
         self.batch_size, self.bag_size, self.feature_size = None, None, None
 
     def forward(self, x):

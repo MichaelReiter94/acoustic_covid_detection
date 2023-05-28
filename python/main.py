@@ -237,18 +237,35 @@ print(DATASET_NAME)
 
 # <editor-fold desc="#################################  FUNCTION DEFINITIONS   #######################################">
 
-def get_parameter_groups(model, output_lr, input_lr, weight_decay=1e-4, verbose=True):
+def get_parameter_groups(model, output_lr, input_lr_coef, weight_decay=1e-4, verbose=True):
     # applies different learning rates for each (parent) layer in the model (for finetuning a pretrained network).
-    # the inout layer gets the inputlr, the output layer the output_lr. All layers in between get linearly interpolated.
+    # the input layer gets the input_lr_coef times the output_lr, the output layer the output_lr.
+    # All layers in between get linearly interpolated.
 
     # works for resnet architecture and assigns a learning rate for each parent layer and the input and output layers
     # in total there are (for a resnet 18) 61 parameter groups but only 4 parent layers and 3 layers as in/out layers
     # this means there are only  4+3  different learning rates.
+    params = []
+    input_lr = input_lr_coef * output_lr
+    mil_lr = 666e-6  # TODO make dynamic
 
     parent_layer = lambda name: name.split(".")[0]
     layer_names = [name for name, _ in model.named_parameters()]
     layer_names.reverse()
-    parent_layers = list(set([parent_layer(layer) for layer in layer_names]))
+    # parent_layers = list(set([parent_layer(layer) for layer in layer_names]))
+
+    if USE_MIL:
+        layer_names = [name for name in layer_names if "resnet" in name]
+        parent_layer = lambda name: name.split(".")[1]
+        mil_layers = [name for name, _ in model.named_parameters() if "mil_net" in name]
+        for layer in mil_layers:
+            params.append({'params': [p for n, p in model.named_parameters() if n == layer and p.requires_grad],
+                           'lr': mil_lr,
+                           'weight_decay': weight_decay})
+    parent_layers = []
+    for layer in layer_names:
+        if parent_layer(layer) not in parent_layers:
+            parent_layers.append(parent_layer(layer))
     n_parent_layers = len(parent_layers)
     lr = output_lr
     last_parent_layer = parent_layer(layer_names[0])
@@ -256,7 +273,6 @@ def get_parameter_groups(model, output_lr, input_lr, weight_decay=1e-4, verbose=
         print(f'0: lr = {lr:.6f}, {last_parent_layer}')
 
     lr_mult = np.power(input_lr / output_lr, 1 / (n_parent_layers - 1))
-    params = []
     for idx, layer in enumerate(layer_names):
         current_parent_layer = parent_layer(layer)
         if last_parent_layer != (current_parent_layer):
@@ -419,9 +435,9 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
     training_set = DatasetClass(user_ids=train_ids, original_files=dataset_dict["participants_file"],
                                 transform=transform, augmented_files=augmented_datasets,
                                 augmentations=train_augmentation, verbose=VERBOSE, mode="train",
-                                min_audio_quality=p.min_quality)
+                                min_audio_quality=1)
     validation_set = DatasetClass(user_ids=validation_ids, original_files=dataset_dict["participants_file"],
-                                  transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=p.min_quality)
+                                  transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=2)
 
     training_set.mix_up_alpha = params.mixup_a
     training_set.mix_up_probability = params.mixup_p
@@ -506,12 +522,12 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
 def get_optimizer(model_name, load_from_disc=False):
     # if isinstance(p.lr, tuple):
     if p.lr_in is None:
-        params = get_parameter_groups(my_cnn, input_lr=p.lr, output_lr=p.lr, weight_decay=p.wd, verbose=True)
+        params = get_parameter_groups(my_cnn, input_lr_coef=1, output_lr=p.lr, weight_decay=p.wd, verbose=True)
     else:
-        params = get_parameter_groups(my_cnn, input_lr=p.lr_in, output_lr=p.lr, weight_decay=p.wd, verbose=True)
+        params = get_parameter_groups(my_cnn, input_lr_coef=p.lr_in, output_lr=p.lr, weight_decay=p.wd, verbose=True)
 
     # else:
-    #     params = get_parameter_groups(my_cnn, input_lr=p.lr, output_lr=p.lr, weight_decay=p.wd, verbose=True)
+    #     params = get_parameter_groups(my_cnn, input_lr_coef=p.lr, output_lr=p.lr, weight_decay=p.wd, verbose=True)
     my_optimizer = Adam(params)
     # my_optimizer = Adam(my_cnn.parameters(), lr=p.lr, weight_decay=p.wd)
     if load_from_disc:
@@ -576,9 +592,11 @@ if __name__ == "__main__":
             lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
             # lr_scheduler = ReduceLROnPlateau(optimizer, patience=10, verbose=False,
             #                                  factor=0.2, mode='min', threshold=0.001)
-            loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight]), reduction='mean').to(device)
-            # loss_func = FocalLoss(gamma=p.focal_loss, pos_weight=p.class_weight, reduction='mean',
-            #                       exclude_outliers=1).to(device)
+            if p.focal_loss is not None:
+                loss_func = FocalLoss(gamma=p.focal_loss, pos_weight=p.class_weight, reduction='mean',
+                                      exclude_outliers=p.exclude_outliers).to(device)
+            else:
+                loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight]), reduction='mean').to(device)
             tracker.save_model_and_training_parameters(my_cnn, optimizer, loss_func)
             tracker.types_of_recording = train_set.types_of_recording
             tracker.audio_processing_params = train_set.audio_proc_params
