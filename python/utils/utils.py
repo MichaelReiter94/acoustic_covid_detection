@@ -107,6 +107,7 @@ class FocalLoss(nn.Module):
         elif self.reduction == "sum":
             loss = torch.nansum(loss)
         # return loss * self.norm_coef
+        loss = torch.nan_to_num(loss, 0.0, 0.0, 0.0)  # replaces nan, and infinities with zeros
         return loss
 
     def __str__(self):

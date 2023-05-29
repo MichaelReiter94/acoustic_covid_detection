@@ -237,7 +237,7 @@ print(DATASET_NAME)
 
 # <editor-fold desc="#################################  FUNCTION DEFINITIONS   #######################################">
 
-def get_parameter_groups(model, output_lr, input_lr_coef, weight_decay=1e-4, verbose=True):
+def get_parameter_groups(model, output_lr, input_lr_coef, mil_lr_coef, weight_decay=1e-4, verbose=True):
     # applies different learning rates for each (parent) layer in the model (for finetuning a pretrained network).
     # the input layer gets the input_lr_coef times the output_lr, the output layer the output_lr.
     # All layers in between get linearly interpolated.
@@ -247,7 +247,8 @@ def get_parameter_groups(model, output_lr, input_lr_coef, weight_decay=1e-4, ver
     # this means there are only  4+3  different learning rates.
     params = []
     input_lr = input_lr_coef * output_lr
-    mil_lr = 666e-6  # TODO make dynamic
+    mil_lr = mil_lr_coef * output_lr
+    # mil_lr = 666e-6  # TODO make dynamic
 
     parent_layer = lambda name: name.split(".")[0]
     layer_names = [name for name, _ in model.named_parameters()]
@@ -261,7 +262,7 @@ def get_parameter_groups(model, output_lr, input_lr_coef, weight_decay=1e-4, ver
         for layer in mil_layers:
             params.append({'params': [p for n, p in model.named_parameters() if n == layer and p.requires_grad],
                            'lr': mil_lr,
-                           'weight_decay': weight_decay})
+                           'weight_decay': weight_decay*5})
     parent_layers = []
     for layer in layer_names:
         if parent_layer(layer) not in parent_layers:
@@ -521,11 +522,20 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
 
 def get_optimizer(model_name, load_from_disc=False):
     # if isinstance(p.lr, tuple):
-    if p.lr_in is None:
-        params = get_parameter_groups(my_cnn, input_lr_coef=1, output_lr=p.lr, weight_decay=p.wd, verbose=True)
+    if p.lr_mil is None:
+        lr_mil_coef = 1.0
     else:
-        params = get_parameter_groups(my_cnn, input_lr_coef=p.lr_in, output_lr=p.lr, weight_decay=p.wd, verbose=True)
+        lr_mil_coef = p.lr_mil
+    if p.lr_in is None:
+        lr_in = 1.0
+    else:
+        lr_in = p.lr_in
 
+    params = get_parameter_groups(my_cnn, input_lr_coef=lr_in, output_lr=p.lr, mil_lr_coef=lr_mil_coef,
+                                  weight_decay=p.wd, verbose=True)
+    # else:
+    #     params = get_parameter_groups(my_cnn, input_lr_coef=p.lr_in, output_lr=p.lr,mil_lr=lr_mil,
+    #                                   weight_decay=p.wd, verbose=True)
     # else:
     #     params = get_parameter_groups(my_cnn, input_lr_coef=p.lr, output_lr=p.lr, weight_decay=p.wd, verbose=True)
     my_optimizer = Adam(params)

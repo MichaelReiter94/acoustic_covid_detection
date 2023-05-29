@@ -34,6 +34,7 @@ class PredictionLevelMILSingleGatedLayer(nn.Module):
 
         self.binary_classification_layer = nn.Sequential(
             nn.Linear(self.resnet_out_features, 1),
+            # TODO does this sigmoid make sense or should i leave it out?
             nn.Sigmoid()
         )
 
