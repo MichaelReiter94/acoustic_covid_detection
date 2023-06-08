@@ -30,34 +30,35 @@
 
 
 parameters = dict(
-    batch=[128],
-    lr=[1e-3],
+    batch=[20],
+    lr=[3e-4],
     wd=[1e-4],
-    lr_decay=[0.985],
+    lr_decay=[0.98],
     mixup_a=[0.2],
     mixup_p=[0.8],
-    use_augm_datasets=[True],
+    use_augm_datasets=[False],
     shift=[True],
     sigma=[0.2],
     weighted_sampler=[True],
     class_weight=[1],
-    bag_size=[8],
-    n_MIL_Neurons=[64],
-    time_steps=[112],
-    lr_in=[0.1],  # actually this is a coefficient. the input lr is: lr_in * lr, if None
-    mil_lr=[1e-5],
-    dropout_p=[0.25],
+    bag_size=[10],
+    n_MIL_Neurons=[32],
+    time_steps=[224],
+    lr_in=[None],
+    lr_mil=[5.0],
+    dropout_p=[0.2],
     focal_loss=[0],
-    exclude_outliers=[2],
-    min_quality=["train:1-val:2"]
+    exclude_outliers=[1],
+    min_quality=["t1val1"],
+    use_resnorm=[False]
 )
-DATASET_NAME = "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel"
-RUN_COMMENT = f"MIL"
-n_epochs = 300
+DATASET_NAME = "logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel"
+RUN_COMMENT = f"resnormTests"
+n_epochs = 250
 n_cross_validation_runs = 1
-USE_MIL = False
+USE_MIL = True
 MODEL_NAME = "resnet18"
 
 USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
 QUICK_TRAIN_FOR_TESTS = False
-SAMPLES_PER_EPOCH = 1024
+SAMPLES_PER_EPOCH = 512

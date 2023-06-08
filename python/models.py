@@ -9,25 +9,37 @@ from torchinfo import summary
 
 def get_bag_statistics(y, batch_size, bag_size):
     y = y.view(batch_size, bag_size)
-    eps = 1e-6
+    # print(f"min: {round(float(y.min().detach()), 1)}  |  max: {round(float(y.max().detach()), 1)}")
+    # eps = 1e-6
+    eps = 0
     mu = y.mean(dim=1)
     diff = y.t() - mu
     sigma = torch.pow(torch.mean(torch.pow(diff, 2.0), dim=0), 0.5) + eps
+    # var = torch.mean(torch.pow(diff, 2.0), dim=0)
     z_scores = diff / sigma
+    # print(f"sigma: {sigma.min()}  --  z_scores: {z_scores.max()}")
     skew = torch.mean(torch.pow(z_scores, 3), dim=0)
     kurtoses = torch.mean(torch.pow(z_scores, 4), dim=0)
     median, _ = y.median(dim=1)
     minimum, _ = y.min(dim=1)
     maximum, _ = y.max(dim=1)
+    pos_area = torch.relu(y).sum(dim=1)
+    neg_area = torch.relu(y*-1.0).sum(dim=1)
 
-    bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses]).t()
+    # bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses]).t()
+    bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses, pos_area, neg_area]).t()
+    # bag_statistics = torch.stack([mu, median, var, minimum, maximum]).t()
+    # bag_statistics = torch.nan_to_num(bag_statistics, 0.0, 0.0, 0.0)  # replaces nan, and infinities with zeros
+    if torch.isnan(bag_statistics).sum() > 0 or bag_statistics.max() > 100:
+        print("bag statistics contains nan or greater than 100:")
+        print(bag_statistics)
     return bag_statistics
 
 
 class PredictionLevelMILSingleGatedLayer(nn.Module):
     def __init__(self, n_neurons, dropout=0.25):
         super().__init__()
-        self.n_bag_statistics = 7
+        self.n_bag_statistics = 9
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
         self.resnet_out_features = 512
@@ -35,24 +47,31 @@ class PredictionLevelMILSingleGatedLayer(nn.Module):
         self.binary_classification_layer = nn.Sequential(
             nn.Linear(self.resnet_out_features, 1),
             # TODO does this sigmoid make sense or should i leave it out?
-            nn.Sigmoid()
+            # nn.Sigmoid()
+
         )
 
         self.attention_V = nn.Sequential(
+            nn.BatchNorm1d(self.n_bag_statistics),
             nn.Linear(self.n_bag_statistics, self.n_hidden_attention),
             nn.Tanh(),
         )
         self.attention_U = nn.Sequential(
+            nn.BatchNorm1d(self.n_bag_statistics),
             nn.Linear(self.n_bag_statistics, self.n_hidden_attention),
             nn.Sigmoid(),
         )
         self.attention_out = nn.Sequential(
-            nn.Dropout(p=self.dropout),
+            nn.Dropout(p=0.1),
             nn.Linear(self.n_hidden_attention, 1)
         )
 
     def forward(self, y, batch_size, bag_size):
+        if torch.isnan(y).sum() > 0:
+            print("prediction y includes nan")
+            print(y)
         y = self.binary_classification_layer(y.squeeze())
+
         bag_statistics = get_bag_statistics(y, batch_size, bag_size)
         A_V = self.attention_V(bag_statistics)
         A_U = self.attention_U(bag_statistics)
@@ -61,7 +80,7 @@ class PredictionLevelMILSingleGatedLayer(nn.Module):
 
 
 class PredictionLevelMILDoubleDenseLayer(nn.Module):
-    def __init__(self, n_neurons, dropout=0.25):
+    def __init__(self, n_neurons, dropout=0.2):
         super().__init__()
         self.n_bag_statistics = 7
         self.n_hidden_attention = n_neurons
@@ -70,12 +89,15 @@ class PredictionLevelMILDoubleDenseLayer(nn.Module):
 
         self.binary_classification_layer = nn.Sequential(
             nn.Linear(self.resnet_out_features, 1),
-            nn.Sigmoid()
+            # nn.Sigmoid()
         )
         self.mil_net = nn.Sequential(
+            nn.BatchNorm1d(self.n_bag_statistics),
             nn.Linear(self.n_bag_statistics, self.n_hidden_attention),
+            nn.ReLU(),
             nn.Dropout(p=self.dropout),
             nn.Linear(self.n_hidden_attention, self.n_hidden_attention),
+            nn.ReLU(),
             nn.Dropout(p=self.dropout),
             nn.Linear(self.n_hidden_attention, 1)
         )
@@ -464,7 +486,7 @@ class Resnet18MILOld(nn.Module):
     def __init__(self, n_hidden_attention=32, add_dropouts=True, add_residual_layers=False, F=224, T=224, C=1):
         super().__init__()
         # self.resnet = resnet18(weights=ResNet18_Weights.DEFAULT)
-        self.resnet = get_resnet18(add_dropouts=add_dropouts, add_residual_layers=add_residual_layers,
+        self.resnet = get_resnet18(dropout_p=add_dropouts, add_residual_layers=add_residual_layers,
                                    FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C)
         # TIMESTEPS = 224
         # FREQUNCY_BINS = 224

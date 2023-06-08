@@ -102,12 +102,18 @@ class FocalLoss(nn.Module):
         # loss = torch.nan_to_num(loss, 0.0, 0.0, 0.0)  # replaces nan, and infinities with zeros
         loss = self._exclude_outliers(loss)
         # print(loss)
+        if torch.isnan(loss).sum() > 0 or loss.max() > 100:
+            print("single sample loss contains nan or is greater than 100:")
+            print(loss)
         if self.reduction == "mean":
             loss = torch.nanmean(loss)
         elif self.reduction == "sum":
             loss = torch.nansum(loss)
         # return loss * self.norm_coef
         loss = torch.nan_to_num(loss, 0.0, 0.0, 0.0)  # replaces nan, and infinities with zeros
+        if torch.isnan(loss).sum() > 0 or loss.max() > 100:
+            print("batch loss is nan or greater than 100")
+            print(loss)
         return loss
 
     def __str__(self):

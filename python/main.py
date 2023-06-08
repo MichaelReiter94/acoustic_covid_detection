@@ -190,6 +190,8 @@ if len(sys.argv) > 1:
     argument = sys.argv[1]
     if argument == "settings_11_46":
         from run_settings.settings_11_46 import *
+    elif argument == "settings_11_46_mil":
+        from run_settings.settings_11_46_mil import *
     elif argument == "settings_23_46":
         from run_settings.settings_23_46 import *
     elif argument == "settings_92_184":
@@ -330,6 +332,13 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
     if prediction.dim() == 0:
         prediction = torch.unsqueeze(prediction, dim=0)
     loss = current_loss_func(prediction, label)
+    if loss == torch.nan or loss > 10:
+        print(loss)
+    for p in model.parameters():
+        if torch.isnan(p).sum() > 0:
+            print(f"model weights have nan in them")
+
+
     # accuracy = get_accuracy(prediction, label)
     my_tracker.add_metrics(loss, label, prediction)
 
@@ -438,7 +447,7 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
                                 augmentations=train_augmentation, verbose=VERBOSE, mode="train",
                                 min_audio_quality=1)
     validation_set = DatasetClass(user_ids=validation_ids, original_files=dataset_dict["participants_file"],
-                                  transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=2)
+                                  transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=1)
 
     training_set.mix_up_alpha = params.mixup_a
     training_set.mix_up_probability = params.mixup_p
@@ -467,7 +476,7 @@ def get_data_loaders(training_set, validation_set, params):
     # create dataloaders
     n_workers = 0
     if cuda.is_available():
-        n_workers = 2
+        n_workers = 0
     if params.weighted_sampler:
         train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler,
                            num_workers=n_workers)
@@ -494,10 +503,11 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
     elif model_name == "Resnet18_MIL":
         _, _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons, dropout_p=p.dropout_p,
-                                          F=F, T=T).to(device)
+                                          F=F, T=T, add_residual_layers=p.use_resnorm).to(device)
     elif model_name == "resnet18":
         _, F, T = train_set.get_input_shape()
-        my_model = model_dict[model_name](dropout_p=p.dropout_p, FREQUNCY_BINS=F, TIMESTEPS=T).to(device)
+        my_model = model_dict[model_name](dropout_p=p.dropout_p, FREQUNCY_BINS=F, TIMESTEPS=T,
+                                          add_residual_layers=p.use_resnorm).to(device)
     else:
         my_model = model_dict[model_name]().to(device)
 
