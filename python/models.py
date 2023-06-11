@@ -9,7 +9,7 @@ from torchinfo import summary
 
 def get_bag_statistics(y, batch_size, bag_size):
     y = y.view(batch_size, bag_size)
-    # print(f"min: {round(float(y.min().detach()), 1)}  |  max: {round(float(y.max().detach()), 1)}")
+    print(f"min: {round(float(y.min().detach()), 1)}  |  max: {round(float(y.max().detach()), 1)}")
     # eps = 1e-6
     eps = 0
     mu = y.mean(dim=1)
@@ -30,8 +30,8 @@ def get_bag_statistics(y, batch_size, bag_size):
     bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses, pos_area, neg_area]).t()
     # bag_statistics = torch.stack([mu, median, var, minimum, maximum]).t()
     # bag_statistics = torch.nan_to_num(bag_statistics, 0.0, 0.0, 0.0)  # replaces nan, and infinities with zeros
-    if torch.isnan(bag_statistics).sum() > 0 or bag_statistics.max() > 100:
-        print("bag statistics contains nan or greater than 100:")
+    if torch.isnan(bag_statistics).sum() > 0:
+        print("bag statistics contains nan:")
         print(bag_statistics)
     return bag_statistics
 
@@ -329,7 +329,7 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
         my_model.conv1.weight = nn.Parameter(weights_single_color)
 
     ############################  add residual normalization layers to resnet  ################################
-    gamma = 1.0
+    gamma = 0.5
     if add_residual_layers:
         layers = summary(my_model, input_size=(1, N_CHANNELS, FREQUNCY_BINS, TIMESTEPS))
         layers = str(layers).split("\n")
@@ -351,13 +351,13 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
                                            affine=True, track_running_stats=False, gamma_is_learnable=True)
                 )
                 counter += 1
-                layer[i].bn2 = nn.Sequential(
-                    layer[i].bn2,
-                    # ResidualInstanceNorm2d(num_features=layer[i].conv2.out_channels, gamma=gamma,
-                    #                        gamma_is_learnable=True)
-                    ResidualInstanceNorm2d(num_features=fdims[counter], gamma=gamma,
-                                           affine=True, track_running_stats=False, gamma_is_learnable=True)
-                )
+                # layer[i].bn2 = nn.Sequential(
+                #     layer[i].bn2,
+                #     # ResidualInstanceNorm2d(num_features=layer[i].conv2.out_channels, gamma=gamma,
+                #     #                        gamma_is_learnable=True)
+                #     ResidualInstanceNorm2d(num_features=fdims[counter], gamma=gamma,
+                #                            affine=True, track_running_stats=False, gamma_is_learnable=True)
+                # )
                 counter += 1
 
     ############################  add dropouts (spatial and regular) to resnet  ################################

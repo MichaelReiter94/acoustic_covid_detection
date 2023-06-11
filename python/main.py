@@ -183,6 +183,7 @@ dataset_collection = {
 }
 device = "cuda" if cuda.is_available() else "cpu"
 TESTING_MODE = not cuda.is_available()
+RANDOM_CYCLIC_SHIFT_FOR_EVALUATION = False
 
 # if the script was called with one of those arguments, it will overwrite the settings (hyperparams, dataset etc) with
 # values from the imported file
@@ -473,6 +474,14 @@ def get_data_loaders(training_set, validation_set, params):
     # sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
     sampler = WeightedRandomSampler(sample_weights, num_samples=SAMPLES_PER_EPOCH, replacement=True)
 
+
+    if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
+        label_counts_eval = validation_set.label_counts()[1]
+        label_weights_eval = np.flip(label_counts_eval / np.sum(label_counts_eval))
+        sample_weights_eval = [label_weights_eval[int(label)] for label in validation_set.labels]
+        sampler_eval = WeightedRandomSampler(sample_weights, num_samples=SAMPLES_PER_EPOCH, replacement=True)
+
+
     # create dataloaders
     n_workers = 0
     if cuda.is_available():
@@ -481,8 +490,12 @@ def get_data_loaders(training_set, validation_set, params):
         train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler,
                            num_workers=n_workers)
     else:
-        train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True,
-                           num_workers=n_workers)
+        if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
+            train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler_eval,
+                               num_workers=n_workers)
+        else:
+            train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True,
+                               num_workers=n_workers)
 
     val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
     return train, val
@@ -606,6 +619,8 @@ if __name__ == "__main__":
             train_set.bag_size = p.bag_size
             val_set.bag_size = p.bag_size
             train_set.augmentations = get_online_augmentations(p)
+            if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
+                val_set.augmentations = Compose([CyclicTemporalShift()])
             train_loader, eval_loader = get_data_loaders(train_set, val_set, p)
             my_cnn = get_model(MODEL_NAME, p, load_from_disc=LOAD_FROM_DISC, verbose=False)
             optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
