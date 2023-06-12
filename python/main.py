@@ -23,6 +23,7 @@ import random
 from torch.optim.lr_scheduler import ExponentialLR, ReduceLROnPlateau
 import tkinter as tk
 from tkinter.messagebox import askyesno
+from tkinter.filedialog import askopenfilename
 from torch import cuda
 from utils.utils import FocalLoss
 import sys
@@ -215,7 +216,7 @@ print(f"model used: {MODEL_NAME}")
 date = datetime.today().strftime("%Y-%m-%d")
 RUN_NAME = f"{date}_{MODEL_NAME}_{DATASET_NAME}_{RUN_COMMENT}"
 VERBOSE = True
-LOAD_FROM_DISC = False
+LOAD_FROM_DISC = True
 SAVE_TO_DISC = False
 
 if device == "cpu":
@@ -516,11 +517,11 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
     elif model_name == "Resnet18_MIL":
         _, _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons, dropout_p=p.dropout_p,
-                                          F=F, T=T, add_residual_layers=p.use_resnorm).to(device)
+                                          F=F, T=T, add_residual_layers=p.use_resnorm, load_from_disc=load_from_disc).to(device)
     elif model_name == "resnet18":
         _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](dropout_p=p.dropout_p, FREQUNCY_BINS=F, TIMESTEPS=T,
-                                          add_residual_layers=p.use_resnorm).to(device)
+                                          add_residual_layers=p.use_resnorm, load_from_disc=load_from_disc).to(device)
     else:
         my_model = model_dict[model_name]().to(device)
 
@@ -534,7 +535,8 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
     # TODO move the load from disc functionality inside the "models.py" script
     # if load_from_disc:
     #     try:
-    #         path = f"data/Coswara_processed/models/{model_name}/model.pth"
+    #         path = askopenfilename(initialdir=f"data/Coswara_processed/models")
+    #         # path = f"data/Coswara_processed/models/{model_name}/model.pth"
     #         my_model.load_state_dict(torch.load(path))
     #         print("model weights loaded from disc")
     #     except FileNotFoundError:
@@ -669,7 +671,7 @@ if __name__ == "__main__":
 
     if SAVE_TO_DISC:
         print("saving new model!")
-        MODEL_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/model.pth"
+        MODEL_PATH = f"data/Coswara_processed/models/{date}_{MODEL_NAME}.pth"
         torch.save(my_cnn.state_dict(), MODEL_PATH)
         # optimizer.zero_grad()
         OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"

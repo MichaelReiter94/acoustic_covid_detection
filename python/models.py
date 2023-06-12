@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_Weights
 from utils.utils import ResidualInstanceNorm2d
 from torchinfo import summary
+from tkinter.filedialog import askopenfilename
 
 
 def get_bag_statistics(y, batch_size, bag_size):
@@ -82,7 +83,7 @@ class PredictionLevelMILSingleGatedLayer(nn.Module):
 class PredictionLevelMILDoubleDenseLayer(nn.Module):
     def __init__(self, n_neurons, dropout=0.2):
         super().__init__()
-        self.n_bag_statistics = 7
+        self.n_bag_statistics = 9
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
         self.resnet_out_features = 512
@@ -204,6 +205,8 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         attentation_coef = attentation_coef.view(batch_size, bag_size, 1)
         attentation_coef = F.softmax(attentation_coef, dim=1)
         # batchsize x bagsize x 1
+        print(f"min: {round(float(attentation_coef.min().detach())*100, 0)}  "
+              f"|  max: {round(float(attentation_coef.max().detach())*100, 0)}")
 
         x_combined_bag = y.view(batch_size, bag_size, self.n_features) * attentation_coef
         # y = y.view(batch_size, bag_size, 1)
@@ -308,7 +311,8 @@ class BrogrammersSequentialModel(nn.Module):
         return prediction
 
 
-def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1):
+def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1,
+                 load_from_disc=False):
     my_model = resnet18(weights=ResNet18_Weights.DEFAULT)
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
 
@@ -370,6 +374,19 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
 
     n_features = my_model.fc.in_features
     my_model.fc = nn.Linear(n_features, 1)
+
+    if load_from_disc:
+        try:
+            path = askopenfilename(initialdir=f"data/Coswara_processed/models")
+            # path = f"data/Coswara_processed/models/{model_name}/model.pth"
+            my_model.load_state_dict(torch.load(path))
+            # for param in my_model.parameters():
+            #     param.requires_grad = False
+
+            print("model weights loaded from disc")
+        except FileNotFoundError:
+            print("no saved model parameters found")
+
     return my_model
 
 
@@ -551,17 +568,18 @@ class Resnet18MILOld(nn.Module):
 
 
 class Resnet18MIL(nn.Module):
-    def __init__(self, n_hidden_attention=32, dropout_p=0.0, add_residual_layers=False, F=224, T=224, C=1):
+    def __init__(self, n_hidden_attention=32, dropout_p=0.0, add_residual_layers=False, F=224, T=224, C=1,
+                 load_from_disc=False):
         super().__init__()
         self.resnet = get_resnet18(dropout_p=dropout_p, add_residual_layers=add_residual_layers,
-                                   FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C)
+                                   FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C,  load_from_disc=load_from_disc)
         # trim off the last dense layer [512 --> 1] to be able to add the MIL networks in all variations
         self.resnet = torch.nn.Sequential(*(list(self.resnet.children())[:-1]))
-        self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=dropout_p)
+        # self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=dropout_p)
         # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p)
         # self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p)
-        # self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention,
-        #                                                 n_neurons=n_hidden_attention, dropout=dropout_p)
+        self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention,
+                                                        n_neurons=n_hidden_attention, dropout=dropout_p)
         self.batch_size, self.bag_size, self.feature_size = None, None, None
 
     def forward(self, x):
