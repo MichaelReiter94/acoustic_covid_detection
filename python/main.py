@@ -59,11 +59,11 @@ dataset_collection = {
         "augmented_files": []
     },
     "logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel": {
-            "dataset_class": ResnetLogmelDataset,
-            "participants_file": "2023_05_02_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
-            "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
-                                ".pickle"]
-        },
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_05_02_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
+        "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
+                            ".pickle"]
+    },
     "logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_05_02_logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel.pickle",
@@ -237,6 +237,8 @@ random_seeds = [99468865, 215674, 3213213211, 55555555, 66445511337,
 # first seed (123587955) has a very difficult/bad performing validation set
 print(parameters)
 print(DATASET_NAME)
+
+
 # </editor-fold>
 
 # <editor-fold desc="#################################  FUNCTION DEFINITIONS   #######################################">
@@ -266,7 +268,7 @@ def get_parameter_groups(model, output_lr, input_lr_coef, mil_lr_coef, weight_de
         for layer in mil_layers:
             params.append({'params': [p for n, p in model.named_parameters() if n == layer and p.requires_grad],
                            'lr': mil_lr,
-                           'weight_decay': weight_decay*5})
+                           'weight_decay': weight_decay * 5})
     parent_layers = []
     for layer in layer_names:
         if parent_layer(layer) not in parent_layers:
@@ -339,7 +341,6 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
     for p in model.parameters():
         if torch.isnan(p).sum() > 0:
             print(f"model weights have nan in them")
-
 
     # accuracy = get_accuracy(prediction, label)
     my_tracker.add_metrics(loss, label, prediction)
@@ -475,13 +476,12 @@ def get_data_loaders(training_set, validation_set, params):
     # sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
     sampler = WeightedRandomSampler(sample_weights, num_samples=SAMPLES_PER_EPOCH, replacement=True)
 
-
     if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
         label_counts_eval = validation_set.label_counts()[1]
         label_weights_eval = np.flip(label_counts_eval / np.sum(label_counts_eval))
-        sample_weights_eval = [label_weights_eval[int(label)] for label in validation_set.labels]
-        sampler_eval = WeightedRandomSampler(sample_weights, num_samples=SAMPLES_PER_EPOCH, replacement=True)
-
+        # we want to have the correct ratios for evaluation
+        sample_weights_eval = [1.0 for label in validation_set.labels]
+        sampler_eval = WeightedRandomSampler(sample_weights_eval, num_samples=SAMPLES_PER_EPOCH, replacement=True)
 
     # create dataloaders
     n_workers = 0
@@ -491,14 +491,13 @@ def get_data_loaders(training_set, validation_set, params):
         train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler,
                            num_workers=n_workers)
     else:
-        if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
-            train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler_eval,
-                               num_workers=n_workers)
-        else:
-            train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True,
-                               num_workers=n_workers)
-
-    val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
+        train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True,
+                           num_workers=n_workers)
+    if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION and False:
+        val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=True, sampler=sampler_eval,
+                         num_workers=n_workers)
+    else:
+        val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
     return train, val
 
 
@@ -517,7 +516,8 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
     elif model_name == "Resnet18_MIL":
         _, _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons, dropout_p=p.dropout_p,
-                                          F=F, T=T, add_residual_layers=p.use_resnorm, load_from_disc=load_from_disc).to(device)
+                                          F=F, T=T, add_residual_layers=p.use_resnorm,
+                                          load_from_disc=load_from_disc).to(device)
     elif model_name == "resnet18":
         _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](dropout_p=p.dropout_p, FREQUNCY_BINS=F, TIMESTEPS=T,
@@ -644,22 +644,27 @@ if __name__ == "__main__":
             epoch_start = time.time()
             # </editor-fold>
             for epoch in range(n_epochs):
-                tracker.reset(p, mode="train")
-                for i, batch in enumerate(train_loader):
-                    train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
-                epoch_loss_train = write_metrics(mode="train")
+                # tracker.reset(p, mode="train")
+                # for i, batch in enumerate(train_loader):
+                #     train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
+                # epoch_loss_train = write_metrics(mode="train")
                 with torch.no_grad():
                     tracker.reset(p, mode="eval")
-                    for i, batch in enumerate(eval_loader):
-                        evaluate_batch(my_cnn, batch, loss_func, tracker)
+                    # only oversample the validaton set if cyclic shift is applied.
+                    # otherwise it produces the same results every iteration of the loop
+                    if not RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
+                        VAL_SET_OVERSAMPLING_FACTOR = 1
+                    for _ in range(VAL_SET_OVERSAMPLING_FACTOR):
+                        for i, batch in enumerate(eval_loader):
+                            evaluate_batch(my_cnn, batch, loss_func, tracker)
                     epoch_loss_val = write_metrics(mode="eval")
-                if isinstance(lr_scheduler, ReduceLROnPlateau):
-                    lr_scheduler.step(epoch_loss_train)
-                else:
-                    lr_scheduler.step()
-                if TESTING_MODE:
-                    print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
-                          f" --> {round(lr_scheduler._last_lr[-1], 8)}")
+                # if isinstance(lr_scheduler, ReduceLROnPlateau):
+                #     lr_scheduler.step(epoch_loss_train)
+                # else:
+                #     lr_scheduler.step()
+                # if TESTING_MODE:
+                #     print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
+                #           f" --> {round(lr_scheduler._last_lr[-1], 8)}")
             # ####################################################################################
             if VERBOSE:
                 delta_t = time.time() - epoch_start
@@ -676,3 +681,4 @@ if __name__ == "__main__":
         # optimizer.zero_grad()
         OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
         torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
+

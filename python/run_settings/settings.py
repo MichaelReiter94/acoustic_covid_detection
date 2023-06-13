@@ -30,10 +30,10 @@
 
 
 parameters = dict(
-    batch=[20],
-    lr=[1e-7],
+    batch=[64],
+    lr=[1e-10],
     wd=[1e-4],
-    lr_decay=[0.97],
+    lr_decay=[0.99],
     mixup_a=[0.2],
     mixup_p=[0.8],
     use_augm_datasets=[False],
@@ -43,22 +43,25 @@ parameters = dict(
     class_weight=[1],
     bag_size=[16],
     n_MIL_Neurons=[32],
-    time_steps=[112],
+    time_steps=[300],
     lr_in=[None],
     lr_mil=[1e2],
-    dropout_p=[0.4],
+    dropout_p=[0.3],
     focal_loss=[0],
     exclude_outliers=[0],
     min_quality=["t1val1"],
-    use_resnorm=[False]
+    use_resnorm=[True]
 )
-DATASET_NAME = "logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel"
-RUN_COMMENT = f"validatePerformanceAndSaveNetwork"
+DATASET_NAME = "logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel"
+RUN_COMMENT = f"pretrained_11ms"
 n_epochs = 100
 n_cross_validation_runs = 1
-USE_MIL = True
+USE_MIL = False
 MODEL_NAME = "resnet18"
 
 USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
 QUICK_TRAIN_FOR_TESTS = False
-SAMPLES_PER_EPOCH = 512
+SAMPLES_PER_EPOCH = 8192
+
+RANDOM_CYCLIC_SHIFT_FOR_EVALUATION = True
+VAL_SET_OVERSAMPLING_FACTOR = 2
