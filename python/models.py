@@ -38,19 +38,18 @@ def get_bag_statistics(y, batch_size, bag_size):
 
 
 class PredictionLevelMILSingleGatedLayer(nn.Module):
-    def __init__(self, n_neurons, dropout=0.25):
+    def __init__(self, n_neurons, dropout, last_layer):
         super().__init__()
         self.n_bag_statistics = 9
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
-        self.resnet_out_features = 512
-
-        self.binary_classification_layer = nn.Sequential(
-            nn.Linear(self.resnet_out_features, 1),
-            # TODO does this sigmoid make sense or should i leave it out?
-            # nn.Sigmoid()
-
-        )
+        if last_layer is None:
+            self.resnet_out_features = 512
+            self.binary_classification_layer = nn.Sequential(
+                nn.Linear(self.resnet_out_features, 1),
+            )
+        else:
+            self.binary_classification_layer = last_layer
 
         self.attention_V = nn.Sequential(
             nn.BatchNorm1d(self.n_bag_statistics),
@@ -81,17 +80,19 @@ class PredictionLevelMILSingleGatedLayer(nn.Module):
 
 
 class PredictionLevelMILDoubleDenseLayer(nn.Module):
-    def __init__(self, n_neurons, dropout=0.2):
+    def __init__(self, n_neurons, dropout, last_layer):
         super().__init__()
         self.n_bag_statistics = 9
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
-        self.resnet_out_features = 512
-
-        self.binary_classification_layer = nn.Sequential(
-            nn.Linear(self.resnet_out_features, 1),
-            # nn.Sigmoid()
-        )
+        if last_layer is None:
+            self.resnet_out_features = 512
+            self.binary_classification_layer = nn.Sequential(
+                nn.Linear(self.resnet_out_features, 1),
+            )
+        else:
+            self.binary_classification_layer = last_layer
+            
         self.mil_net = nn.Sequential(
             nn.BatchNorm1d(self.n_bag_statistics),
             nn.Linear(self.n_bag_statistics, self.n_hidden_attention),
@@ -111,16 +112,11 @@ class PredictionLevelMILDoubleDenseLayer(nn.Module):
 
 
 class FeatureLevelMIL(nn.Module):
-    def __init__(self, n_neurons, dropout=0.25):
+    def __init__(self, n_neurons, dropout, last_layer):
         super().__init__()
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
         self.resnet_out_features = 512
-        #         self.n_features = n_features
-
-        #         self.feature_layer = nn.Sequential(
-        #             nn.Linear(self.resnet_out_features, n_features),
-        #         )
 
         self.attention_V = nn.Sequential(
             nn.Linear(self.resnet_out_features, self.n_hidden_attention),
@@ -135,25 +131,32 @@ class FeatureLevelMIL(nn.Module):
             nn.Linear(self.n_hidden_attention, 1)
         )
 
-        self.output_layer = nn.Sequential(
-            nn.Linear(in_features=self.resnet_out_features, out_features=1)
-            # nn.Linear(in_features=128, out_features=1)
-        )
+        if last_layer is None:
+            # self.feature_layer = nn.Sequential(
+            #     nn.Linear(self.resnet_out_features, 1),
+            # )
+            self.output_layer = nn.Sequential(
+                nn.Linear(in_features=self.resnet_out_features, out_features=1)
+                # nn.Linear(in_features=128, out_features=1)
+            )
+        else:
+            self.output_layer = last_layer
 
     def forward(self, y, batch_size, bag_size):
         # y = self.feature_layer(y.squeeze())
 
         y = y.squeeze()
         # batchsize*bagsize x 512
-
         A_V = self.attention_V(y)
         A_U = self.attention_U(y)
-        attentation_coef = self.attention_out(A_V * A_U)  # element wise multiplication
-        attentation_coef = attentation_coef.view(batch_size, bag_size, 1)
-        attentation_coef = F.softmax(attentation_coef, dim=1)
+        attention_coef = self.attention_out(A_V * A_U)  # element wise multiplication
+        attention_coef = attention_coef.view(batch_size, bag_size, 1)
+        attention_coef = F.softmax(attention_coef, dim=1)
         # batchsize x bagsize x 1
+        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach())*100, 0)}  "
+              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach())*100, 0)}")
 
-        x_combined_bag = y.view(batch_size, bag_size, self.resnet_out_features) * attentation_coef
+        x_combined_bag = y.view(batch_size, bag_size, self.resnet_out_features) * attention_coef
         # y = y.view(batch_size, bag_size, 1)
         # [batchsize x bagsize x 512] * [batchsize x bagsize x 1]
         x_combined_bag = x_combined_bag.mean(dim=1)
@@ -164,7 +167,7 @@ class FeatureLevelMIL(nn.Module):
 
 
 class FeatureLevelMILExtraFeatureLayer(nn.Module):
-    def __init__(self, n_features, n_neurons, dropout=0.25):
+    def __init__(self, n_features, n_neurons, dropout):
         super().__init__()
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
@@ -194,21 +197,19 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         )
 
     def forward(self, y, batch_size, bag_size):
-        # y = self.feature_layer(y.squeeze())
-
         y = self.feature_layer(y.squeeze())
         # batchsize*bagsize x 512
 
         A_V = self.attention_V(y)
         A_U = self.attention_U(y)
-        attentation_coef = self.attention_out(A_V * A_U)  # element wise multiplication
-        attentation_coef = attentation_coef.view(batch_size, bag_size, 1)
-        attentation_coef = F.softmax(attentation_coef, dim=1)
+        attention_coef = self.attention_out(A_V * A_U)  # element wise multiplication
+        attention_coef = attention_coef.view(batch_size, bag_size, 1)
+        attention_coef = F.softmax(attention_coef, dim=1)
         # batchsize x bagsize x 1
-        print(f"min: {round(float(attentation_coef.min().detach())*100, 0)}  "
-              f"|  max: {round(float(attentation_coef.max().detach())*100, 0)}")
+        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach())*100, 0)}  "
+              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach())*100, 0)}")
 
-        x_combined_bag = y.view(batch_size, bag_size, self.n_features) * attentation_coef
+        x_combined_bag = y.view(batch_size, bag_size, self.n_features) * attention_coef
         # y = y.view(batch_size, bag_size, 1)
         # [batchsize x bagsize x 512] * [batchsize x bagsize x 1]
         x_combined_bag = x_combined_bag.mean(dim=1)
@@ -377,6 +378,8 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
 
     if load_from_disc:
         try:
+            # TODO if load_from_disc is a path, directly load it. no browsing for a file (if the path exists)
+            # if the path does not exist probably raise an error
             path = askopenfilename(initialdir=f"data/Coswara_processed/models")
             # path = f"data/Coswara_processed/models/{model_name}/model.pth"
             my_model.load_state_dict(torch.load(path))
@@ -477,18 +480,18 @@ class BrogrammersMIL(nn.Module):
 
         ###################################################     MIL    #################################################
         # # regular version of the MIL attention mechanism
-        # attentation_coef = self.mil_attention(x)
+        # attention_coef = self.mil_attention(x)
         # gated attention mechanism
         A_V = self.attention_V(x)
         A_U = self.attention_U(x)
-        attentation_coef = self.attention_out(A_V * A_U)  # element wise multiplication
+        attention_coef = self.attention_out(A_V * A_U)  # element wise multiplication
 
         # needed for both MIL mechanisms
         n_features = x.shape[-1]
-        attentation_coef = attentation_coef.view(batch_size, bag_size, 1)
-        attentation_coef = F.softmax(attentation_coef, dim=1)
+        attention_coef = attention_coef.view(batch_size, bag_size, 1)
+        attention_coef = F.softmax(attention_coef, dim=1)
         ################################################################################################################
-        x_combined_bag = x.view(batch_size, bag_size, n_features) * attentation_coef
+        x_combined_bag = x.view(batch_size, bag_size, n_features) * attention_coef
         x_combined_bag = x_combined_bag.mean(dim=1)
 
         y_pred = self.output_layer(x_combined_bag)
@@ -574,12 +577,19 @@ class Resnet18MIL(nn.Module):
         self.resnet = get_resnet18(dropout_p=dropout_p, add_residual_layers=add_residual_layers,
                                    FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C,  load_from_disc=load_from_disc)
         # trim off the last dense layer [512 --> 1] to be able to add the MIL networks in all variations
+
+        #  # uncomment this if you want to have the last dense layer from the resnet in the mil network instead.
+        #  # this loses all pretrained weights
+        last_layer = list(self.resnet.children())[-1]
         self.resnet = torch.nn.Sequential(*(list(self.resnet.children())[:-1]))
-        # self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=dropout_p)
-        # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p)
-        # self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p)
-        self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention,
-                                                        n_neurons=n_hidden_attention, dropout=dropout_p)
+
+        # self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
+        #                                                   last_layer=last_layer)
+        # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
+        #                                                   last_layer=last_layer)
+        self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p, last_layer=last_layer)
+        # self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention, n_neurons=n_hidden_attention,
+        #                                                 dropout=dropout_p)
         self.batch_size, self.bag_size, self.feature_size = None, None, None
 
     def forward(self, x):
@@ -701,11 +711,11 @@ class PredLevelMIL(nn.Module):  # brogrammers
         y_pred = self.attention_out(A_V * A_U)  # element wise multiplication
 
         # needed for both MIL mechanisms
-        # attentation_coef = torch.transpose(attentation_coef, 1, 0)
-        # attentation_coef = F.softmax(attentation_coef, dim=1)
+        # attention_coef = torch.transpose(attention_coef, 1, 0)
+        # attention_coef = F.softmax(attention_coef, dim=1)
         ################################################################################################################
 
-        # x_combined_bag = torch.mm(attentation_coef, x)
+        # x_combined_bag = torch.mm(attention_coef, x)
         # y_pred = self.output_layer(x_combined_bag)
         # no sigmoid activation because the now used BCELossWithLogits class has the activation function included (
         # which improves numerical stability/precision) Also this class has the possibility to add a weighting to the
