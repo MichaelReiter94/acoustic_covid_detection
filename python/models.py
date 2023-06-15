@@ -6,6 +6,7 @@ from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_We
 from utils.utils import ResidualInstanceNorm2d
 from torchinfo import summary
 from tkinter.filedialog import askopenfilename
+import tkinter as tk
 
 
 def get_bag_statistics(y, batch_size, bag_size):
@@ -153,8 +154,8 @@ class FeatureLevelMIL(nn.Module):
         attention_coef = attention_coef.view(batch_size, bag_size, 1)
         attention_coef = F.softmax(attention_coef, dim=1)
         # batchsize x bagsize x 1
-        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach())*100, 0)}  "
-              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach())*100, 0)}")
+        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach())*100, 1)}  "
+              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach())*100, 1)}")
 
         x_combined_bag = y.view(batch_size, bag_size, self.resnet_out_features) * attention_coef
         # y = y.view(batch_size, bag_size, 1)
@@ -206,8 +207,8 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         attention_coef = attention_coef.view(batch_size, bag_size, 1)
         attention_coef = F.softmax(attention_coef, dim=1)
         # batchsize x bagsize x 1
-        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach())*100, 0)}  "
-              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach())*100, 0)}")
+        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach())*100, 1)}  "
+              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach())*100, 1)}")
 
         x_combined_bag = y.view(batch_size, bag_size, self.n_features) * attention_coef
         # y = y.view(batch_size, bag_size, 1)
@@ -376,19 +377,27 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
     n_features = my_model.fc.in_features
     my_model.fc = nn.Linear(n_features, 1)
 
-    if load_from_disc:
-        try:
-            # TODO if load_from_disc is a path, directly load it. no browsing for a file (if the path exists)
-            # if the path does not exist probably raise an error
-            path = askopenfilename(initialdir=f"data/Coswara_processed/models")
-            # path = f"data/Coswara_processed/models/{model_name}/model.pth"
-            my_model.load_state_dict(torch.load(path))
-            # for param in my_model.parameters():
-            #     param.requires_grad = False
+    if isinstance(load_from_disc, bool):
+        if load_from_disc:
+            try:
+                # TODO if load_from_disc is a path, directly load it. no browsing for a file (if the path exists)
+                # if the path does not exist probably raise an error
+                window = tk.Tk()
 
-            print("model weights loaded from disc")
-        except FileNotFoundError:
-            print("no saved model parameters found")
+                path = askopenfilename(initialdir=f"data/Coswara_processed/models")
+                # path = f"data/Coswara_processed/models/{model_name}/model.pth"
+                my_model.load_state_dict(torch.load(path))
+                window.destroy()
+
+                # for param in my_model.parameters():
+                #     param.requires_grad = False
+
+                print("model weights loaded from disc")
+            except FileNotFoundError:
+                print("no saved model parameters found")
+    elif isinstance(load_from_disc, str):
+        path = load_from_disc
+        my_model.load_state_dict(torch.load(path))
 
     return my_model
 
