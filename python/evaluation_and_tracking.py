@@ -598,6 +598,7 @@ class IntraEpochMetricsTracker:
             print(f"AUC ROC:   {round(metric_dict['auc_roc'] * 100, 1)}%")
             print(f"Accuracy:  {round(metric_dict['accuracy'] * 100, 1)}%")
             print(f"F1-score:  {round(metric_dict['f1_score'] * 100, 1)}%")
+            print(f"AUC Pr-Rec:  {round(metric_dict['auc_prec_recall'] * 100, 1)}%")
 
         return metric_dict
 

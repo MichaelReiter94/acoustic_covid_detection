@@ -27,7 +27,8 @@ from tkinter.filedialog import askopenfilename
 from torch import cuda
 from utils.utils import FocalLoss
 import sys
-
+import matplotlib as mpl
+mpl.rcParams["savefig.directory"] = "../documentation/imgs"
 # <editor-fold desc="#########################  SETTIGNS AND CONSTANTS and constants #################################">
 dataset_collection = {
     "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel": {
@@ -184,7 +185,9 @@ dataset_collection = {
 }
 device = "cuda" if cuda.is_available() else "cpu"
 TESTING_MODE = not cuda.is_available()
-RANDOM_CYCLIC_SHIFT_FOR_EVALUATION = False
+# RANDOM_CYCLIC_SHIFT_FOR_EVALUATION = False
+# LOAD_FROM_DISC = True
+# SAVE_TO_DISC = False
 
 # if the script was called with one of those arguments, it will overwrite the settings (hyperparams, dataset etc) with
 # values from the imported file
@@ -216,8 +219,6 @@ print(f"model used: {MODEL_NAME}")
 date = datetime.today().strftime("%Y-%m-%d")
 RUN_NAME = f"{date}_{MODEL_NAME}_{DATASET_NAME}_{RUN_COMMENT}"
 VERBOSE = True
-LOAD_FROM_DISC = True
-SAVE_TO_DISC = False
 
 if device == "cpu":
     window = tk.Tk()
@@ -476,12 +477,12 @@ def get_data_loaders(training_set, validation_set, params):
     # sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
     sampler = WeightedRandomSampler(sample_weights, num_samples=SAMPLES_PER_EPOCH, replacement=True)
 
-    if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
-        label_counts_eval = validation_set.label_counts()[1]
-        label_weights_eval = np.flip(label_counts_eval / np.sum(label_counts_eval))
-        # we want to have the correct ratios for evaluation
-        sample_weights_eval = [1.0 for label in validation_set.labels]
-        sampler_eval = WeightedRandomSampler(sample_weights_eval, num_samples=SAMPLES_PER_EPOCH, replacement=True)
+    # if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
+    #     label_counts_eval = validation_set.label_counts()[1]
+    #     label_weights_eval = np.flip(label_counts_eval / np.sum(label_counts_eval))
+    #     # we want to have the correct ratios for evaluation
+    #     sample_weights_eval = [1.0 for label in validation_set.labels]
+    #     sampler_eval = WeightedRandomSampler(sample_weights_eval, num_samples=SAMPLES_PER_EPOCH, replacement=True)
 
     # create dataloaders
     n_workers = 0
@@ -493,11 +494,13 @@ def get_data_loaders(training_set, validation_set, params):
     else:
         train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True,
                            num_workers=n_workers)
-    if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION and False:
-        val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=True, sampler=sampler_eval,
-                         num_workers=n_workers)
-    else:
-        val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
+    # if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION and False:
+    #     val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=True, sampler=sampler_eval,
+    #                      num_workers=n_workers)
+    # else:
+    #     val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
+    val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
+
     return train, val
 
 
@@ -621,7 +624,7 @@ if __name__ == "__main__":
             train_set.bag_size = p.bag_size
             val_set.bag_size = p.bag_size
             train_set.augmentations = get_online_augmentations(p)
-            if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
+            if VAL_SET_OVERSAMPLING_FACTOR > 1:
                 val_set.augmentations = Compose([CyclicTemporalShift()])
             train_loader, eval_loader = get_data_loaders(train_set, val_set, p)
             my_cnn = get_model(MODEL_NAME, p, load_from_disc=LOAD_FROM_DISC, verbose=False)
@@ -644,27 +647,27 @@ if __name__ == "__main__":
             epoch_start = time.time()
             # </editor-fold>
             for epoch in range(n_epochs):
-                # tracker.reset(p, mode="train")
-                # for i, batch in enumerate(train_loader):
-                #     train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
-                # epoch_loss_train = write_metrics(mode="train")
+                tracker.reset(p, mode="train")
+                for i, batch in enumerate(train_loader):
+                    train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
+                epoch_loss_train = write_metrics(mode="train")
                 with torch.no_grad():
                     tracker.reset(p, mode="eval")
                     # only oversample the validaton set if cyclic shift is applied.
                     # otherwise it produces the same results every iteration of the loop
-                    if not RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
-                        VAL_SET_OVERSAMPLING_FACTOR = 1
+                    # if not RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
+                    #     VAL_SET_OVERSAMPLING_FACTOR = 1
                     for _ in range(VAL_SET_OVERSAMPLING_FACTOR):
                         for i, batch in enumerate(eval_loader):
                             evaluate_batch(my_cnn, batch, loss_func, tracker)
                     epoch_loss_val = write_metrics(mode="eval")
-                # if isinstance(lr_scheduler, ReduceLROnPlateau):
-                #     lr_scheduler.step(epoch_loss_train)
-                # else:
-                #     lr_scheduler.step()
-                # if TESTING_MODE:
-                #     print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
-                #           f" --> {round(lr_scheduler._last_lr[-1], 8)}")
+                if isinstance(lr_scheduler, ReduceLROnPlateau):
+                    lr_scheduler.step(epoch_loss_train)
+                else:
+                    lr_scheduler.step()
+                if TESTING_MODE:
+                    print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
+                          f" --> {round(lr_scheduler._last_lr[-1], 8)}")
             # ####################################################################################
             if VERBOSE:
                 delta_t = time.time() - epoch_start
