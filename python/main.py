@@ -201,6 +201,8 @@ if len(sys.argv) > 1:
         from run_settings.settings_23_46 import *
     elif argument == "settings_92_184":
         from run_settings.settings_92_184 import *
+    elif argument == "settings_23_46_noOversampling":
+        from run_settings.settings_23_46_noOversampling import *
     else:
         print("Invalid argument!")
         sys.exit(1)
@@ -530,10 +532,11 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
 
     # # print model summary
     if verbose:
-        full_input_shape = [p.batch]
-        for dim in my_model.input_size:
-            full_input_shape.append(dim)
-        summary(my_model, tuple(full_input_shape))
+        pass
+        # full_input_shape = [p.batch]
+        # for dim in my_model.input_size:
+        #     full_input_shape.append(dim)
+        # summary(my_model, tuple(full_input_shape))
 
     # TODO move the load from disc functionality inside the "models.py" script
     # if load_from_disc:
@@ -611,6 +614,12 @@ if __name__ == "__main__":
     summarize_cuda_memory_usage(summarize_device=True)
     tracker = IntraEpochMetricsTracker(datasets={DATASET_NAME: dataset_collection[DATASET_NAME]}, verbose=TESTING_MODE)
     for p in get_parameter_combinations(parameters, verbose=True):
+
+        if USE_MIL:
+            VAL_SET_OVERSAMPLING_FACTOR = 1
+        else:
+            VAL_SET_OVERSAMPLING_FACTOR = p.val_oversampl
+
         tracker.setup_run_with_new_params(p)
         for random_seed in random_seeds[:n_cross_validation_runs]:
             # <editor-fold desc="#####################################  SETUP ########################################">

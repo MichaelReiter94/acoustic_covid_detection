@@ -11,7 +11,8 @@ import tkinter as tk
 
 def get_bag_statistics(y, batch_size, bag_size):
     y = y.view(batch_size, bag_size)
-    print(f"min: {round(float(y.min().detach()), 1)}  |  max: {round(float(y.max().detach()), 1)}")
+    print(f"min: {round(float(y.min(dim=1)[0].mean().detach()), 1)}  |  "
+          f"max: {round(float(y.max(dim=1)[0].mean().detach()), 1)}")
     # eps = 1e-6
     eps = 0
     mu = y.mean(dim=1)
