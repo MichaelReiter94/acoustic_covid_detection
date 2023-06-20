@@ -63,3 +63,17 @@ class Participant:
         except ValueError:
             label = None
         return label
+
+    def __str__(self):
+        types_of_recs = list(self.recordings.keys())
+        durs = [self.recordings[recording_name].original_duration_trimmed_silence for recording_name in types_of_recs]
+        if len(durs) == 1:
+            durs = durs[0]
+        return f"id: {self.id}\n" \
+               f"label: {self.get_label()}\n" \
+               f"age: {self.meta_data['age']}\n" \
+               f"gender: {self.meta_data['gender']}\n" \
+               f"duration: {durs}s"
+
+    def __repr__(self):
+        return f"class: {self.__class__.__name__} | id: {self.id} | label: {self.get_label()}"

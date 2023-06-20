@@ -29,11 +29,36 @@
 # # logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel
 
 
+# parameters = dict(
+#     batch=[64],
+#     lr=[5e-4],
+#     wd=[1e-4],
+#     lr_decay=[0.985],
+#     mixup_a=[0.2],
+#     mixup_p=[0.8],
+#     use_augm_datasets=[False],
+#     shift=[True],
+#     sigma=[0.2],
+#     weighted_sampler=[True],
+#     class_weight=[1],
+#     bag_size=[16],
+#     n_MIL_Neurons=[32],
+#     time_steps=[112],
+#     lr_in=[None],
+#     lr_mil=[1e3],
+#     dropout_p=[0.25],
+#     focal_loss=[0],
+#     exclude_outliers=[1],
+#     min_quality=["t1val1"],
+#     use_resnorm=[False]
+# )
+
+
 parameters = dict(
-    batch=[64],
-    lr=[1e-10],
+    batch=[12],
+    lr=[1e-7],
     wd=[1e-4],
-    lr_decay=[0.99],
+    lr_decay=[0.9],
     mixup_a=[0.2],
     mixup_p=[0.8],
     use_augm_datasets=[False],
@@ -41,27 +66,35 @@ parameters = dict(
     sigma=[0.2],
     weighted_sampler=[True],
     class_weight=[1],
-    bag_size=[16],
+    bag_size=[12],
     n_MIL_Neurons=[32],
-    time_steps=[300],
+    time_steps=[336],
     lr_in=[None],
-    lr_mil=[1e2],
-    dropout_p=[0.3],
+    lr_mil=[1e3],
+    dropout_p=[0.35],
     focal_loss=[0],
     exclude_outliers=[0],
     min_quality=["t1val1"],
-    use_resnorm=[True]
+    use_resnorm=[True],
+    val_oversampl=[8]
 )
-DATASET_NAME = "logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel"
-RUN_COMMENT = f"pretrained_11ms"
-n_epochs = 100
+# if USE_MIL is True, VAL_SET_OVERSAMPLING_FACTOR will be set to be 1 (1 means no oversampling)
+# VAL_SET_OVERSAMPLING_FACTOR = parameters["val_oversampl"]
+
+DATASET_NAME = "logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel"
+RUN_COMMENT = f"saveBestHyperparamRun_oversampled8x"
+n_epochs = 20
 n_cross_validation_runs = 1
-USE_MIL = False
+USE_MIL = True
 MODEL_NAME = "resnet18"
 
 USE_TRAIN_VAL_TEST_SPLIT = True  # use a 70/15/15 split instead of an 80/20 split without test set
 QUICK_TRAIN_FOR_TESTS = False
-SAMPLES_PER_EPOCH = 8192
+SAMPLES_PER_EPOCH = 512
 
-RANDOM_CYCLIC_SHIFT_FOR_EVALUATION = True
-VAL_SET_OVERSAMPLING_FACTOR = 2
+# LOAD_FROM_DISC = r"data\Coswara_processed\models\2023-06-12_resnet18_23ms_82_7_AUCROC_iter74.pth"
+LOAD_FROM_DISC = r"data\Coswara_processed\models\2023-06-19_epoch47_AUCROC0.8215.pth"
+SAVE_TO_DISC = False
+
+
+EVALUATE_TEST_SET = True

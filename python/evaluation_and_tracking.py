@@ -127,6 +127,8 @@ class TrackedRun:
             "train": dict(auc_roc=[], loss=[], accuracy=[], f1_score=[], auc_prec_recall=[],
                           precision=[], tpr_at_95=[], tpr=[], tnr=[], fpr=[], fnr=[]),
             "eval": dict(auc_roc=[], loss=[], accuracy=[], f1_score=[], auc_prec_recall=[],
+                         precision=[], tpr_at_95=[], tpr=[], tnr=[], fpr=[], fnr=[]),
+            "test": dict(auc_roc=[], loss=[], accuracy=[], f1_score=[], auc_prec_recall=[],
                          precision=[], tpr_at_95=[], tpr=[], tnr=[], fpr=[], fnr=[])
         }
         self.best_performance_parameters = dict(
@@ -910,7 +912,7 @@ class IntraEpochMetricsTracker:
                           )
         return fig
 
-    def show_single_run(self, run_id, mode="eval", metric="auc_roc", n_samples_for_smoothing=None,
+    def show_single_run(self, run_id, metric="auc_roc", n_samples_for_smoothing=None,
                         show_separate_folds=True,
                         show_std_area_plot=True):
 
@@ -925,12 +927,23 @@ class IntraEpochMetricsTracker:
         hovertext = dict(run.parameters)
         hovertext = self.get_only_varied_hyperparams(hovertext).replace("{", "").replace("}", "")
         hovertext = hovertext.replace(", ", "<br>")
-        run.plot_mean_run(mode=mode, metric=metric, n_samples_for_smoothing=n_samples_for_smoothing, name=name,
+        run.plot_mean_run(mode="train", metric=metric, n_samples_for_smoothing=n_samples_for_smoothing, name=name,
                           show_separate_folds=show_separate_folds, fig=fig, show_std_area_plot=show_std_area_plot,
-                          hovertext=hovertext)
+                          hovertext=hovertext, color=color_cycle[0])
+        run.plot_mean_run(mode="eval", metric=metric, n_samples_for_smoothing=n_samples_for_smoothing, name=name,
+                          show_separate_folds=show_separate_folds, fig=fig, show_std_area_plot=show_std_area_plot,
+                          hovertext=hovertext, color=color_cycle[1])
+        try:
+            # TODO test what happens if there is a "test" key in the dictionary but there are no entries
+            run.plot_mean_run(mode="test", metric=metric, n_samples_for_smoothing=n_samples_for_smoothing, name=name,
+                              show_separate_folds=show_separate_folds, fig=fig, show_std_area_plot=show_std_area_plot,
+                              hovertext=hovertext, color=color_cycle[2])
+        except KeyError:
+            print("no test data recorded")
+
         fig.update_layout(autosize=False, width=1600, height=600, showlegend=True,
                           margin=dict(l=20, r=20, t=20, b=20),
-                          title_text=f"<b>{mode} - {metric}</b>", title_x=0.3, title_y=0.97, titlefont=dict(size=24),
+                          title_text=f"<b>{metric}</b>", title_x=0.3, title_y=0.97, titlefont=dict(size=24),
                           legend={"orientation": 'h'},
                           yaxis_range=ylimit_dict[metric]
                           )

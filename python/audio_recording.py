@@ -5,6 +5,8 @@ import numpy as np
 import librosa.display
 import matplotlib.pyplot as plt
 from audiomentations import Compose, AddGaussianNoise, PitchShift, HighPassFilter, Gain, Shift, TimeStretch, Trim
+
+
 # def get_3_channel_logmel_spectrum(audio, sr):
 #     # total duration = 2.6 seconds (512 samples hopsize = 11.6ms --> 11.6ms * 224 (frames for resnet input) = 2.6s
 #     target_sr = 44100
@@ -54,7 +56,6 @@ class AudioRecording:
                 self.file_path.append(f"{os.path.join(data_path, combined_rec_type)}.wav".replace("\\", "/"))
         else:
             self.file_path = f"{os.path.join(data_path, type_of_recording)}.wav".replace("\\", "/")
-
 
         self.recording_type = type_of_recording
         self.augmentations = augmentations
@@ -178,6 +179,18 @@ class AudioRecording:
             self.show_logmel()
         else:
             raise KeyError
+
+    def __str__(self):
+        return f"type: {self.recording_type}\n" \
+               f"hop size: {self.hop_size}\n" \
+               f"window length: {self.window_length}\n" \
+               f"n_features: {self.n_features}\n" \
+               f"fmax: {self.fmax}\n" \
+               f"sample rate: {self.target_sr}"
+        # f"nfft: {self.n_fft}\n" \
+
+    def __repr__(self):
+        return f"class: {self.__class__.__name__} | {self.recording_type}"
 
     # def show_3channel_logmel(self, time_frame=None, frequency_range=None):
     #     """

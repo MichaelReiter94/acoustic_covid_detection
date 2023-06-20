@@ -4,6 +4,11 @@ import torch
 from torch import nn
 from torch.nn import InstanceNorm2d
 
+BATCH = 0
+CHANNEL = 1
+FREQUENCY = 2
+TIME = 3
+
 
 def send_mail(to_address, text, subject="This is no spam"):
     gmail = "hundreddaysofcodemr@gmail.com"
@@ -126,7 +131,7 @@ class FocalLoss(nn.Module):
         n = len(loss)
         if n >= 16:
             loss, _ = loss.sort()
-            loss = loss[:n-self.exclude_n]
+            loss = loss[:n - self.exclude_n]
         return loss
     # def _calculate_normalizaiton_coef(self):
     #     # regular BCE loss has an area under curve of 1.412898063659668 (in the range -5, 5 before sigmoid)
@@ -174,11 +179,38 @@ class ResidualInstanceNorm2d(nn.InstanceNorm2d):
 
     def forward(self, x):
         # permute dimensions because we want to apply the normalization across the time and channel dimensions
-        x = x.permute(0, 2, 3, 1).contiguous()
+        # x = x.permute(0, 2, 3, 1).contiguous()
+        x = x.permute(BATCH, FREQUENCY, TIME, CHANNEL).contiguous()
+
         # apply instance normalization
         x = super(ResidualInstanceNorm2d, self).forward(x)
         # permute dimensions back
         x = x.permute(0, 3, 1, 2).contiguous()
+        x = x + self.gamma * x
+        return x
+
+
+class ResidualBatchNorm2d(nn.InstanceNorm2d):
+    # instead of calculating the normalization for each frequency bin by normalizing over all time instances and
+    # channels, we now do so by normalizing over all time instances and all instances in a batch but for every
+    # channel separately
+    def __init__(self, num_features, gamma=1.0, eps=1e-5, momentum=0.1, affine=False, track_running_stats=False,
+                 gamma_is_learnable=False):
+        super(ResidualBatchNorm2d, self).__init__(num_features=num_features, eps=eps, momentum=momentum,
+                                                  affine=affine, track_running_stats=track_running_stats)
+        if gamma_is_learnable:
+            self.gamma = nn.Parameter(torch.tensor(float(gamma)))
+        else:
+            self.gamma = torch.tensor(float(gamma))
+
+    def forward(self, x):
+        # permute dimensions because we want to apply the normalization across the time and channel dimensions
+
+        x = x.permute(CHANNEL, FREQUENCY, TIME, BATCH).contiguous()
+        # apply instance normalization
+        x = super(ResidualBatchNorm2d, self).forward(x)
+        # permute dimensions back
+        x = x.permute(3, 0, 1, 2).contiguous()
         x = x + self.gamma * x
         return x
 

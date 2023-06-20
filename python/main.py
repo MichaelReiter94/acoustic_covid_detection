@@ -28,6 +28,7 @@ from torch import cuda
 from utils.utils import FocalLoss
 import sys
 import matplotlib as mpl
+
 mpl.rcParams["savefig.directory"] = "../documentation/imgs"
 # <editor-fold desc="#########################  SETTIGNS AND CONSTANTS and constants #################################">
 dataset_collection = {
@@ -185,9 +186,6 @@ dataset_collection = {
 }
 device = "cuda" if cuda.is_available() else "cpu"
 TESTING_MODE = not cuda.is_available()
-# RANDOM_CYCLIC_SHIFT_FOR_EVALUATION = False
-# LOAD_FROM_DISC = True
-# SAVE_TO_DISC = False
 
 # if the script was called with one of those arguments, it will overwrite the settings (hyperparams, dataset etc) with
 # values from the imported file
@@ -201,8 +199,8 @@ if len(sys.argv) > 1:
         from run_settings.settings_23_46 import *
     elif argument == "settings_92_184":
         from run_settings.settings_92_184 import *
-    elif argument == "settings_23_46_noOversampling":
-        from run_settings.settings_23_46_noOversampling import *
+    # elif argument == "settings_23_46_noOversampling":
+    #     from run_settings.settings_23_46_noOversampling import *
     else:
         print("Invalid argument!")
         sys.exit(1)
@@ -214,6 +212,9 @@ if MODEL_NAME == "resnet18" and USE_MIL:
     MODEL_NAME = "Resnet18_MIL"
 elif MODEL_NAME == "brogrammers" and USE_MIL:
     MODEL_NAME = "MIL_brogrammers"
+
+# if EVALUATE_TEST_SET:
+#     n_epochs = 0
 
 print(f"Dataset used: {DATASET_NAME}")
 print(f"model used: {MODEL_NAME}")
@@ -240,11 +241,15 @@ random_seeds = [99468865, 215674, 3213213211, 55555555, 66445511337,
 # first seed (123587955) has a very difficult/bad performing validation set
 print(parameters)
 print(DATASET_NAME)
-
+model_weights = None
+model_save_name = None
+highest_score = 0
+training_params = None
 
 # </editor-fold>
 
 # <editor-fold desc="#################################  FUNCTION DEFINITIONS   #######################################">
+
 
 def get_parameter_groups(model, output_lr, input_lr_coef, mil_lr_coef, weight_decay=1e-4, verbose=True):
     # applies different learning rates for each (parent) layer in the model (for finetuning a pretrained network).
@@ -455,36 +460,28 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
     validation_set = DatasetClass(user_ids=validation_ids, original_files=dataset_dict["participants_file"],
                                   transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=1)
 
+    test_set = None
+    if EVALUATE_TEST_SET:
+        test_set = DatasetClass(user_ids=test_ids, original_files=dataset_dict["participants_file"],
+                                transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=1)
+
     training_set.mix_up_alpha = params.mixup_a
     training_set.mix_up_probability = params.mixup_p
-    return training_set, validation_set
+    return training_set, validation_set, test_set
 
 
-def get_data_loaders(training_set, validation_set, params):
+def get_data_loaders(training_set, validation_set, testing_set, params):
     # create weighted random sampler
     label_counts = training_set.label_counts()[1]
     label_weights = np.flip(label_counts / np.sum(label_counts))
-
-    # sample_weights = []
-    # for (data, label) in training_set:
-    #     sample_weights.append(label_weights[int(label)])
-
-    # sample_weights = [label_weights[int(label)] for (data, label) in training_set]
     sample_weights = [label_weights[int(label)] for label in training_set.labels]
 
     # might actually set num_samples higher because like this not all samples from the dataset are chosen within 1 epoch
-    # or fix to "lower" num_sumbples so that we always have the same number of samples within an epoch, no matter how
+    # or fix to "lower" num_samples so that we always have the same number of samples within an epoch, no matter how
     # many augmented samples will be added to the training data. This adds comparability between runs.
 
     # sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
     sampler = WeightedRandomSampler(sample_weights, num_samples=SAMPLES_PER_EPOCH, replacement=True)
-
-    # if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
-    #     label_counts_eval = validation_set.label_counts()[1]
-    #     label_weights_eval = np.flip(label_counts_eval / np.sum(label_counts_eval))
-    #     # we want to have the correct ratios for evaluation
-    #     sample_weights_eval = [1.0 for label in validation_set.labels]
-    #     sampler_eval = WeightedRandomSampler(sample_weights_eval, num_samples=SAMPLES_PER_EPOCH, replacement=True)
 
     # create dataloaders
     n_workers = 0
@@ -496,14 +493,11 @@ def get_data_loaders(training_set, validation_set, params):
     else:
         train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True,
                            num_workers=n_workers)
-    # if RANDOM_CYCLIC_SHIFT_FOR_EVALUATION and False:
-    #     val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=True, sampler=sampler_eval,
-    #                      num_workers=n_workers)
-    # else:
-    #     val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
     val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
-
-    return train, val
+    test = None
+    if EVALUATE_TEST_SET:
+        test = DataLoader(dataset=testing_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
+    return train, val, test
 
 
 def get_model(model_name, params, verbose=True, load_from_disc=False):
@@ -530,24 +524,12 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
     else:
         my_model = model_dict[model_name]().to(device)
 
-    # # print model summary
+    # print model summary
     if verbose:
-        pass
-        # full_input_shape = [p.batch]
-        # for dim in my_model.input_size:
-        #     full_input_shape.append(dim)
-        # summary(my_model, tuple(full_input_shape))
-
-    # TODO move the load from disc functionality inside the "models.py" script
-    # if load_from_disc:
-    #     try:
-    #         path = askopenfilename(initialdir=f"data/Coswara_processed/models")
-    #         # path = f"data/Coswara_processed/models/{model_name}/model.pth"
-    #         my_model.load_state_dict(torch.load(path))
-    #         print("model weights loaded from disc")
-    #     except FileNotFoundError:
-    #         print("no saved model parameters found")
-
+        full_input_shape = [p.batch]
+        for dim in my_model.input_size:
+            full_input_shape.append(dim)
+        summary(my_model, tuple(full_input_shape))
     return my_model
 
 
@@ -593,7 +575,7 @@ def write_metrics(mode):
     #     writer.add_scalar(f"07_TrueNegativeRate_or_Specificity/{mode}", metrics["tnr"], epoch)
     #     writer.add_scalar(f"08_Precision_or_PositivePredictiveValue/{mode}", metrics["precision"], epoch)
     #     writer.add_scalar(f"09_true_positives_at_95/{mode}", metrics["tpr_at_95"], epoch)
-    return metrics["loss"]
+    return metrics["loss"], metrics["auc_roc"]
 
 
 def get_online_augmentations(run_parameters):
@@ -625,17 +607,24 @@ if __name__ == "__main__":
             # <editor-fold desc="#####################################  SETUP ########################################">
             summarize_cuda_memory_usage()
             tracker.start_run_with_random_seed(random_seed)
-            train_set, val_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
-                                              train_augmentation=augmentations, random_seed=random_seed, params=p)
+            train_set, val_set, test_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
+                                                        train_augmentation=augmentations, random_seed=random_seed,
+                                                        params=p)
 
             train_set.n_channels, val_set.n_channels = 1, 1
             train_set.n_timesteps, val_set.n_timesteps = p.time_steps, p.time_steps
-            train_set.bag_size = p.bag_size
-            val_set.bag_size = p.bag_size
+            train_set.bag_size, val_set.bag_size = p.bag_size, p.bag_size
+            if EVALUATE_TEST_SET:
+                test_set.n_channels = 1
+                test_set.n_timesteps = p.time_steps
+                test_set.bag_size = p.bag_size
             train_set.augmentations = get_online_augmentations(p)
+
             if VAL_SET_OVERSAMPLING_FACTOR > 1:
                 val_set.augmentations = Compose([CyclicTemporalShift()])
-            train_loader, eval_loader = get_data_loaders(train_set, val_set, p)
+                if EVALUATE_TEST_SET:
+                    test_set.augmentations = Compose([CyclicTemporalShift()])
+            train_loader, eval_loader, test_loader = get_data_loaders(train_set, val_set, test_set, p)
             my_cnn = get_model(MODEL_NAME, p, load_from_disc=LOAD_FROM_DISC, verbose=False)
             optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
             lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
@@ -659,17 +648,22 @@ if __name__ == "__main__":
                 tracker.reset(p, mode="train")
                 for i, batch in enumerate(train_loader):
                     train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
-                epoch_loss_train = write_metrics(mode="train")
+                epoch_loss_train, _ = write_metrics(mode="train")
                 with torch.no_grad():
                     tracker.reset(p, mode="eval")
-                    # only oversample the validaton set if cyclic shift is applied.
-                    # otherwise it produces the same results every iteration of the loop
-                    # if not RANDOM_CYCLIC_SHIFT_FOR_EVALUATION:
-                    #     VAL_SET_OVERSAMPLING_FACTOR = 1
                     for _ in range(VAL_SET_OVERSAMPLING_FACTOR):
                         for i, batch in enumerate(eval_loader):
                             evaluate_batch(my_cnn, batch, loss_func, tracker)
-                    epoch_loss_val = write_metrics(mode="eval")
+                    epoch_loss_val, auc_roc = write_metrics(mode="eval")
+
+                if SAVE_TO_DISC:
+                    # auc_roc = tracker.get_epoch_metrics()["auc_roc"]
+                    if auc_roc > highest_score:
+                        model_weights = my_cnn.state_dict()
+                        model_save_name = f"{date}_epoch{epoch}_AUCROC{auc_roc}"
+                        highest_score = auc_roc
+                        training_params = p
+
                 if isinstance(lr_scheduler, ReduceLROnPlateau):
                     lr_scheduler.step(epoch_loss_train)
                 else:
@@ -677,7 +671,16 @@ if __name__ == "__main__":
                 if TESTING_MODE:
                     print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
                           f" --> {round(lr_scheduler._last_lr[-1], 8)}")
-            # ####################################################################################
+                # #####################################     EVALUATE TEST SET      #####################################
+                if EVALUATE_TEST_SET:
+                    print("  #######   TEST SET     #######")
+                    with torch.no_grad():
+                        tracker.reset(p, mode="test")
+                        for _ in range(VAL_SET_OVERSAMPLING_FACTOR):
+                            for i, batch in enumerate(test_loader):
+                                evaluate_batch(my_cnn, batch, loss_func, tracker)
+                        epoch_loss_test = write_metrics(mode="test")
+            # ##########################################################################################################
             if VERBOSE:
                 delta_t = time.time() - epoch_start
                 print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
@@ -687,10 +690,12 @@ if __name__ == "__main__":
                 pickle.dump(tracker, f)
 
     if SAVE_TO_DISC:
-        print("saving new model!")
-        MODEL_PATH = f"data/Coswara_processed/models/{date}_{MODEL_NAME}.pth"
-        torch.save(my_cnn.state_dict(), MODEL_PATH)
+        print(f"saving new model! From the Parameter Run:\n"
+              f"{training_params}")
+        MODEL_PATH = f"data/Coswara_processed/models/{model_save_name}.pth"
+        # torch.save(my_cnn.state_dict(), MODEL_PATH)
+        torch.save(model_weights, MODEL_PATH)
+        print("done")
         # optimizer.zero_grad()
-        OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
-        torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
-
+        # OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
+        # torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
