@@ -276,7 +276,7 @@ def get_parameter_groups(model, output_lr, input_lr_coef, mil_lr_coef, weight_de
         for layer in mil_layers:
             params.append({'params': [p for n, p in model.named_parameters() if n == layer and p.requires_grad],
                            'lr': mil_lr,
-                           'weight_decay': weight_decay * 5})
+                           'weight_decay': weight_decay * 10})
     parent_layers = []
     for layer in layer_names:
         if parent_layer(layer) not in parent_layers:
@@ -693,9 +693,10 @@ if __name__ == "__main__":
         print(f"saving new model! From the Parameter Run:\n"
               f"{training_params}")
         MODEL_PATH = f"data/Coswara_processed/models/{model_save_name}.pth"
-        # torch.save(my_cnn.state_dict(), MODEL_PATH)
         torch.save(model_weights, MODEL_PATH)
-        print("done")
+        FINAL_MODEL_PATH = f"data/Coswara_processed/models/{date}_finalepoch_AUCROC{auc_roc}.pth"
+        torch.save(my_cnn.state_dict(), FINAL_MODEL_PATH)
+        # print("done")
         # optimizer.zero_grad()
         # OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
         # torch.save(optimizer.state_dict(), OPTIMIZER_PATH)

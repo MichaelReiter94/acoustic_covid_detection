@@ -3,10 +3,11 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_Weights
-from utils.utils import ResidualInstanceNorm2d
+from utils.utils import ResidualInstanceNorm2d, ResidualBatchNorm2d
 from torchinfo import summary
 from tkinter.filedialog import askopenfilename
 import tkinter as tk
+from torch import cuda
 
 
 def get_bag_statistics(y, batch_size, bag_size):
@@ -27,7 +28,7 @@ def get_bag_statistics(y, batch_size, bag_size):
     minimum, _ = y.min(dim=1)
     maximum, _ = y.max(dim=1)
     pos_area = torch.relu(y).sum(dim=1)
-    neg_area = torch.relu(y*-1.0).sum(dim=1)
+    neg_area = torch.relu(y * -1.0).sum(dim=1)
 
     # bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses]).t()
     bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses, pos_area, neg_area]).t()
@@ -94,7 +95,7 @@ class PredictionLevelMILDoubleDenseLayer(nn.Module):
             )
         else:
             self.binary_classification_layer = last_layer
-            
+
         self.mil_net = nn.Sequential(
             nn.BatchNorm1d(self.n_bag_statistics),
             nn.Linear(self.n_bag_statistics, self.n_hidden_attention),
@@ -155,8 +156,8 @@ class FeatureLevelMIL(nn.Module):
         attention_coef = attention_coef.view(batch_size, bag_size, 1)
         attention_coef = F.softmax(attention_coef, dim=1)
         # batchsize x bagsize x 1
-        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach())*100, 1)}  "
-              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach())*100, 1)}")
+        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach()) * 100, 1)}  "
+              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach()) * 100, 1)}")
 
         x_combined_bag = y.view(batch_size, bag_size, self.resnet_out_features) * attention_coef
         # y = y.view(batch_size, bag_size, 1)
@@ -208,8 +209,8 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         attention_coef = attention_coef.view(batch_size, bag_size, 1)
         attention_coef = F.softmax(attention_coef, dim=1)
         # batchsize x bagsize x 1
-        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach())*100, 1)}  "
-              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach())*100, 1)}")
+        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach()) * 100, 1)}  "
+              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach()) * 100, 1)}")
 
         x_combined_bag = y.view(batch_size, bag_size, self.n_features) * attention_coef
         # y = y.view(batch_size, bag_size, 1)
@@ -318,6 +319,7 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
                  load_from_disc=False):
     my_model = resnet18(weights=ResNet18_Weights.DEFAULT)
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
+    device = "cuda" if cuda.is_available() else "cpu"
 
     # my_model = resnet18()  # not pretrained
     # for param in my_model.parameters():
@@ -356,6 +358,8 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
                     #                        gamma_is_learnable=True)
                     ResidualInstanceNorm2d(num_features=fdims[counter], gamma=gamma,
                                            affine=True, track_running_stats=False, gamma_is_learnable=True)
+                    # ResidualBatchNorm2d(num_features=fdims[counter], gamma=gamma,
+                    #                     affine=True, track_running_stats=True, gamma_is_learnable=True)
                 )
                 counter += 1
                 # layer[i].bn2 = nn.Sequential(
@@ -388,7 +392,7 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
                 path = askopenfilename(initialdir=f"data/Coswara_processed/models")
                 print(f"Path to pretrained model:\n{path}")
                 # path = f"data/Coswara_processed/models/{model_name}/model.pth"
-                my_model.load_state_dict(torch.load(path))
+                my_model.load_state_dict(torch.load(path, map_locaction=torch.device(device)))
                 window.destroy()
 
                 # for param in my_model.parameters():
@@ -400,7 +404,7 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
     elif isinstance(load_from_disc, str):
         path = load_from_disc
         print(f"Path to pretrained model:\n{path}")
-        my_model.load_state_dict(torch.load(path))
+        my_model.load_state_dict(torch.load(path, map_locaction=torch.device(device)))
 
     return my_model
 
@@ -587,7 +591,7 @@ class Resnet18MIL(nn.Module):
                  load_from_disc=False):
         super().__init__()
         self.resnet = get_resnet18(dropout_p=dropout_p, add_residual_layers=add_residual_layers,
-                                   FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C,  load_from_disc=load_from_disc)
+                                   FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C, load_from_disc=load_from_disc)
         # trim off the last dense layer [512 --> 1] to be able to add the MIL networks in all variations
 
         #  # uncomment this if you want to have the last dense layer from the resnet in the mil network instead.
