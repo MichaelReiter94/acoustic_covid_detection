@@ -187,7 +187,7 @@ dataset_collection = {
 device = "cuda" if cuda.is_available() else "cpu"
 TESTING_MODE = not cuda.is_available()
 
-# if the script was called with one of those arguments, it will overwrite the settings (hyperparams, dataset etc) with
+# if the script was called with one of those arguments, it will overwrite the settings (hyperparams, dataset etc.) with
 # values from the imported file
 if len(sys.argv) > 1:
     argument = sys.argv[1]
@@ -575,7 +575,8 @@ def write_metrics(mode):
     #     writer.add_scalar(f"07_TrueNegativeRate_or_Specificity/{mode}", metrics["tnr"], epoch)
     #     writer.add_scalar(f"08_Precision_or_PositivePredictiveValue/{mode}", metrics["precision"], epoch)
     #     writer.add_scalar(f"09_true_positives_at_95/{mode}", metrics["tpr_at_95"], epoch)
-    return metrics["loss"], metrics["auc_roc"]
+    performance_eval_metric = (metrics["auc_roc"] +  metrics["accuracy"]) / 2
+    return metrics["loss"], performance_eval_metric
 
 
 def get_online_augmentations(run_parameters):
@@ -654,14 +655,14 @@ if __name__ == "__main__":
                     for _ in range(VAL_SET_OVERSAMPLING_FACTOR):
                         for i, batch in enumerate(eval_loader):
                             evaluate_batch(my_cnn, batch, loss_func, tracker)
-                    epoch_loss_val, auc_roc = write_metrics(mode="eval")
+                    epoch_loss_val, eval_metric = write_metrics(mode="eval")
 
                 if SAVE_TO_DISC:
                     # auc_roc = tracker.get_epoch_metrics()["auc_roc"]
-                    if auc_roc > highest_score:
+                    if eval_metric > highest_score:
                         model_weights = my_cnn.state_dict()
-                        model_save_name = f"{date}_epoch{epoch}_AUCROC{auc_roc}"
-                        highest_score = auc_roc
+                        model_save_name = f"{date}_epoch{epoch}_evalMetric_{np.round(eval_metric*100, 1)}"
+                        highest_score = eval_metric
                         training_params = p
 
                 if isinstance(lr_scheduler, ReduceLROnPlateau):
@@ -679,23 +680,28 @@ if __name__ == "__main__":
                         for _ in range(VAL_SET_OVERSAMPLING_FACTOR):
                             for i, batch in enumerate(test_loader):
                                 evaluate_batch(my_cnn, batch, loss_func, tracker)
-                        epoch_loss_test = write_metrics(mode="test")
+                        write_metrics(mode="test")
             # ##########################################################################################################
             if VERBOSE:
                 delta_t = time.time() - epoch_start
                 print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
 
+            if SAVE_TO_DISC:
+                print(f"saving new model! From the Parameter Run:\n"
+                      f"{training_params}")
+                MODEL_PATH = f"data/Coswara_processed/models/{model_save_name}_seed{random_seed}.pth"
+                torch.save(model_weights, MODEL_PATH)
+
         if TRACK_METRICS:
             with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
                 pickle.dump(tracker, f)
 
-    if SAVE_TO_DISC:
-        print(f"saving new model! From the Parameter Run:\n"
-              f"{training_params}")
-        MODEL_PATH = f"data/Coswara_processed/models/{model_save_name}.pth"
-        torch.save(model_weights, MODEL_PATH)
-        FINAL_MODEL_PATH = f"data/Coswara_processed/models/{date}_finalepoch_AUCROC{auc_roc}.pth"
-        torch.save(my_cnn.state_dict(), FINAL_MODEL_PATH)
+
+        # save last iteration of training
+        # FINAL_MODEL_PATH = f"data/Coswara_processed/models/{date}_" \
+        #                    f"finalepoch_evalMetric_{np.round(eval_metric*100, 1)}.pth"
+        # torch.save(my_cnn.state_dict(), FINAL_MODEL_PATH)
+
         # print("done")
         # optimizer.zero_grad()
         # OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
