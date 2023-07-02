@@ -392,7 +392,7 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
                 path = askopenfilename(initialdir=f"data/Coswara_processed/models")
                 print(f"Path to pretrained model:\n{path}")
                 # path = f"data/Coswara_processed/models/{model_name}/model.pth"
-                my_model.load_state_dict(torch.load(path, map_locaction=torch.device(device)))
+                my_model.load_state_dict(torch.load(path, map_location=torch.device(device)))
                 window.destroy()
 
                 # for param in my_model.parameters():
@@ -404,7 +404,7 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
     elif isinstance(load_from_disc, str):
         path = load_from_disc
         print(f"Path to pretrained model:\n{path}")
-        my_model.load_state_dict(torch.load(path, map_locaction=torch.device(device)))
+        my_model.load_state_dict(torch.load(path, map_location=torch.device(device)))
 
     return my_model
 

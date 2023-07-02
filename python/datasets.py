@@ -145,7 +145,7 @@ class CustomDataset(Dataset):
             elif input_features.dim() == 4:
                 input_features = input_features.expand(-1, 3, -1, -1)
 
-        return input_features, torch.tensor(output_label).float()
+        return input_features, torch.tensor(output_label).float(), self.participants[idx].id
 
     def __len__(self):
         return len(self.participants)
@@ -161,7 +161,7 @@ class CustomDataset(Dataset):
         return label_count
 
     def get_input_shape(self):
-        in_features, _ = self.__getitem__(0)
+        in_features, _, _ = self.__getitem__(0)
         return in_features.shape
 
     def summarize(self):

@@ -245,7 +245,8 @@ model_weights = None
 model_save_name = None
 highest_score = 0
 training_params = None
-
+loss_by_sample_tracking = {}
+loss_by_sample_tracking_train = {}
 # </editor-fold>
 
 # <editor-fold desc="#################################  FUNCTION DEFINITIONS   #######################################">
@@ -336,6 +337,8 @@ def get_parameter_combinations(param_dict, verbose=True):
 
 
 def train_on_batch(model, current_batch, current_loss_func, current_optimizer, my_tracker):
+    current_batch, sample_ids = current_batch[:2], current_batch[2]
+
     model.train()
     input_data, label = current_batch
     input_data, label = input_data.to(device), label.to(device)
@@ -343,7 +346,18 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
     prediction = torch.squeeze(model(input_data))
     if prediction.dim() == 0:
         prediction = torch.unsqueeze(prediction, dim=0)
-    loss = current_loss_func(prediction, label)
+    loss, loss_per_sample = current_loss_func(prediction, label)
+    try:
+        last_aucroc = my_tracker.crossval_runs[-1].runs[-1].metrics["eval"]["auc_roc"][-1]
+    except IndexError:
+        last_aucroc = 0
+    if last_aucroc > 0.75:
+        loss_per_sample = loss_per_sample.detach().numpy()
+        for idx, sample_id in enumerate(sample_ids):
+            if sample_id not in loss_by_sample_tracking_train:
+                loss_by_sample_tracking_train[sample_id] = []
+            loss_by_sample_tracking_train[sample_id].append(loss_per_sample[idx])
+
     if loss == torch.nan or loss > 10:
         print(loss)
     for p in model.parameters():
@@ -360,15 +374,27 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
 
 
 def evaluate_batch(model, current_batch, loss_function, my_tracker):
+    current_batch, sample_ids = current_batch[:2], current_batch[2]
+
     model.eval()
     input_data, label = current_batch
     input_data, label = input_data.to(device), label.to(device)
     prediction = torch.squeeze(model(input_data))
     if prediction.dim() == 0:
         prediction = torch.unsqueeze(prediction, dim=0)
-    loss = loss_function(prediction, label)
-    # pred_after_sigmoid = torch.sigmoid(prediction)
-    # accuracy = get_accuracy(prediction, label)
+    loss, loss_per_sample = loss_function(prediction, label)
+    try:
+        last_aucroc = my_tracker.crossval_runs[-1].runs[-1].metrics["eval"]["auc_roc"][-1]
+    except IndexError:
+        last_aucroc = 0
+    if last_aucroc > 0.75:
+        loss_per_sample = loss_per_sample.detach().numpy()
+        for idx, sample_id in enumerate(sample_ids):
+            if sample_id not in loss_by_sample_tracking:
+                loss_by_sample_tracking[sample_id] = []
+            loss_by_sample_tracking[sample_id].append(loss_per_sample[idx])
+        # pred_after_sigmoid = torch.sigmoid(prediction)
+        # accuracy = get_accuracy(prediction, label)
     my_tracker.add_metrics(loss, label, prediction)
 
 
@@ -399,8 +425,8 @@ def load_train_val_and_test_set_ids_from_disc(rand_seed, split_ratio):
     # test set is fixed on disc! with (now) 15% of the whole valid samples (excluded bad covid labels and invalid audio
     # although low quality audio is still included)
     # The remaining training and evaluation set (85% - ~2000 samples) are randomly split in each fold during cross val.
-    test_set = pd.read_csv("data/Coswara_processed/test_set_df.csv")
-    train_and_validation_set = pd.read_csv("data/Coswara_processed/train_and_validation_set_df.csv")
+    test_set = pd.read_csv("data/Coswara_processed/test_set_df_dicova.csv")
+    train_and_validation_set = pd.read_csv("data/Coswara_processed/train_and_validation_set_df_dicova.csv")
     test_set_ids = list(test_set["user_id"])
 
     train_val_pos_ids = train_and_validation_set[train_and_validation_set["covid_label"] == 1.0]
@@ -631,11 +657,12 @@ if __name__ == "__main__":
             lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
             # lr_scheduler = ReduceLROnPlateau(optimizer, patience=10, verbose=False,
             #                                  factor=0.2, mode='min', threshold=0.001)
+            loss_reduction = "mean"
             if p.focal_loss is not None:
-                loss_func = FocalLoss(gamma=p.focal_loss, pos_weight=p.class_weight, reduction='mean',
+                loss_func = FocalLoss(gamma=p.focal_loss, pos_weight=p.class_weight, reduction=loss_reduction,
                                       exclude_outliers=p.exclude_outliers).to(device)
             else:
-                loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight]), reduction='mean').to(device)
+                loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight]), reduction=loss_reduction).to(device)
             tracker.save_model_and_training_parameters(my_cnn, optimizer, loss_func)
             tracker.types_of_recording = train_set.types_of_recording
             tracker.audio_processing_params = train_set.audio_proc_params
@@ -674,7 +701,7 @@ if __name__ == "__main__":
                           f" --> {round(lr_scheduler._last_lr[-1], 8)}")
                 # #####################################     EVALUATE TEST SET      #####################################
                 if EVALUATE_TEST_SET:
-                    print("  #######   TEST SET     #######")
+                    # print("  #######   TEST SET     #######")
                     with torch.no_grad():
                         tracker.reset(p, mode="test")
                         for _ in range(VAL_SET_OVERSAMPLING_FACTOR):

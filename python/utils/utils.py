@@ -102,10 +102,10 @@ class FocalLoss(nn.Module):
         """
 
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor):
-        loss = sigmoid_focal_loss(predictions, targets, alpha=self.alpha, gamma=self.gamma, reduction="none")
+        loss_original = sigmoid_focal_loss(predictions, targets, alpha=self.alpha, gamma=self.gamma, reduction="none")
         # loss = sigmoid_focal_loss(predictions, targets, alpha=self.alpha, gamma=self.gamma, reduction=self.reduction)
         # loss = torch.nan_to_num(loss, 0.0, 0.0, 0.0)  # replaces nan, and infinities with zeros
-        loss = self._exclude_outliers(loss)
+        loss = self._exclude_outliers(loss_original)
         # print(loss)
         if torch.isnan(loss).sum() > 0 or loss.max() > 100:
             print("single sample loss contains nan or is greater than 100:")
@@ -119,7 +119,7 @@ class FocalLoss(nn.Module):
         if torch.isnan(loss).sum() > 0 or loss.max() > 100:
             print("batch loss is nan or greater than 100")
             print(loss)
-        return loss
+        return loss, loss_original
 
     def __str__(self):
         return str(f"sigmoid_focal_loss(gamma={self.gamma}, pos_weight={self.pos_weight})")
