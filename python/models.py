@@ -601,9 +601,9 @@ class Resnet18MIL(nn.Module):
 
         # self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
         #                                                   last_layer=last_layer)
-        # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
-        #                                                   last_layer=last_layer)
-        self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p, last_layer=last_layer)
+        self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
+                                                          last_layer=last_layer)
+        # self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p, last_layer=last_layer)
         # self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention, n_neurons=n_hidden_attention,
         #                                                 dropout=dropout_p)
         self.batch_size, self.bag_size, self.feature_size = None, None, None

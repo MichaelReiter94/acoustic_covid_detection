@@ -154,7 +154,7 @@ class TrackedRun:
 
     def get_metric(self, mode="eval", metric="auc_roc", n_samples_for_smoothing=1):
         # n_samples_for_smoothing meaning the size of the kernel/filter (weighted moving average) in samples
-        if n_samples_for_smoothing > 1:
+        if n_samples_for_smoothing > 1 and len(self.metrics[mode][metric] >= n_samples_for_smoothing):
             smoothed_metric = smooth_function(self.metrics[mode][metric], kernel_size=n_samples_for_smoothing)
         else:
             smoothed_metric = self.metrics[mode][metric]
@@ -239,9 +239,15 @@ class CrossValRuns:
 
         # - save number of cross val runs
         self.n_folds = len(self.runs)
+        if "test" in self.runs[0].metrics:
+            TEST_SET_WAS_TRACKED = len(self.runs[0].metrics["test"]["auc_roc"]) > 0
+        else:
+            TEST_SET_WAS_TRACKED = False
 
         # - transform the metric lists to np.arrays()
         for run in self.runs:
+            if not TEST_SET_WAS_TRACKED and "test" in run.metrics:
+                run.metrics.pop("test")
             run.convert_to_numpy()
             run.compute_best_performances(metric=self.performance_eval_params["metric_used"],
                                           smoothing=self.performance_eval_params["smoothing"],
@@ -253,6 +259,8 @@ class CrossValRuns:
 
         # - calculate the mean over all folds for each metric and saves the curves
         self.best_performances = {}
+        if not TEST_SET_WAS_TRACKED and "test" in self.mean_run.metrics:
+            self.mean_run.metrics.pop("test")
         for mode in self.mean_run.metrics.keys():
             self.best_performances[mode] = {}
             for metric in self.mean_run.metrics[mode].keys():
@@ -1035,3 +1043,9 @@ class IntraEpochMetricsTracker:
             }
 
         }
+
+
+if __name__ == "__main__":
+    from Jupyter_Notebooks.jupyter_utils import load_tracker
+
+    tracker = load_tracker()

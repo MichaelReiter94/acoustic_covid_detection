@@ -32,6 +32,26 @@ import matplotlib as mpl
 mpl.rcParams["savefig.directory"] = "../documentation/imgs"
 # <editor-fold desc="#########################  SETTIGNS AND CONSTANTS and constants #################################">
 dataset_collection = {
+    "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel": {
+            "dataset_class": ResnetLogmelDataset,
+            "participants_file": "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
+            "augmented_files": ["2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
+                                ".pickle"]
+        },
+    "2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmel": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmel.pickle",
+        "augmented_files": ["2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmelaugmented"
+                            ".pickle"]
+    },
+    "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel.pickle",
+        "augmented_files": ["2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmelaugmented"
+                            ".pickle"]
+    },
+
+
     "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_05_11_logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel.pickle",
@@ -201,6 +221,14 @@ if len(sys.argv) > 1:
         from run_settings.settings_92_184 import *
     # elif argument == "settings_23_46_noOversampling":
     #     from run_settings.settings_23_46_noOversampling import *
+    elif argument == "settings_cough":
+        from run_settings.settings_cough import *
+    elif argument == "settings_speech":
+        from run_settings.settings_speech import *
+    elif argument == "settings_vowels":
+        from run_settings.settings_vowels import *
+    elif argument == "settings_breath":
+        from run_settings.settings_breath import *
     else:
         print("Invalid argument!")
         sys.exit(1)
@@ -236,9 +264,8 @@ augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift(), Trans
 
 random_seeds = [99468865, 215674, 3213213211, 55555555, 66445511337,
                 316497938271, 161094, 191919191, 101010107, 123587955]
-# random_seeds = [123587955, 99468865, 215674, 3213213211, 55555555,
-#                 66445511337, 316497938271, 161094, 191919191, 101010107]
-# first seed (123587955) has a very difficult/bad performing validation set
+# random_seeds = [215674]
+
 print(parameters)
 print(DATASET_NAME)
 model_weights = None
@@ -352,7 +379,7 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
     except IndexError:
         last_aucroc = 0
     if last_aucroc > 0.75:
-        loss_per_sample = loss_per_sample.detach().numpy()
+        loss_per_sample = loss_per_sample.cpu().detach().numpy()
         for idx, sample_id in enumerate(sample_ids):
             if sample_id not in loss_by_sample_tracking_train:
                 loss_by_sample_tracking_train[sample_id] = []
@@ -388,7 +415,7 @@ def evaluate_batch(model, current_batch, loss_function, my_tracker):
     except IndexError:
         last_aucroc = 0
     if last_aucroc > 0.75:
-        loss_per_sample = loss_per_sample.detach().numpy()
+        loss_per_sample = loss_per_sample.cpu().detach().numpy()
         for idx, sample_id in enumerate(sample_ids):
             if sample_id not in loss_by_sample_tracking:
                 loss_by_sample_tracking[sample_id] = []
@@ -689,6 +716,7 @@ if __name__ == "__main__":
                     if eval_metric > highest_score:
                         model_weights = my_cnn.state_dict()
                         model_save_name = f"{date}_epoch{epoch}_evalMetric_{np.round(eval_metric*100, 1)}"
+
                         highest_score = eval_metric
                         training_params = p
 
@@ -713,23 +741,20 @@ if __name__ == "__main__":
                 delta_t = time.time() - epoch_start
                 print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
 
-            if SAVE_TO_DISC:
-                print(f"saving new model! From the Parameter Run:\n"
-                      f"{training_params}")
-                MODEL_PATH = f"data/Coswara_processed/models/{model_save_name}_seed{random_seed}.pth"
-                torch.save(model_weights, MODEL_PATH)
-
         if TRACK_METRICS:
             with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
                 pickle.dump(tracker, f)
+    if SAVE_TO_DISC:
+        print(f"saving new model! From the Parameter Run:\n"
+              f"{training_params}")
+        MODEL_PATH = f"data/Coswara_processed/models/{model_save_name}_seed{random_seed}.pth"
+        torch.save(model_weights, MODEL_PATH)
+    # save last iteration of training
+    # FINAL_MODEL_PATH = f"data/Coswara_processed/models/{date}_" \
+    #                    f"finalepoch_evalMetric_{np.round(eval_metric*100, 1)}.pth"
+    # torch.save(my_cnn.state_dict(), FINAL_MODEL_PATH)
 
-
-        # save last iteration of training
-        # FINAL_MODEL_PATH = f"data/Coswara_processed/models/{date}_" \
-        #                    f"finalepoch_evalMetric_{np.round(eval_metric*100, 1)}.pth"
-        # torch.save(my_cnn.state_dict(), FINAL_MODEL_PATH)
-
-        # print("done")
-        # optimizer.zero_grad()
-        # OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
-        # torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
+    # print("done")
+    # optimizer.zero_grad()
+    # OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
+    # torch.save(optimizer.state_dict(), OPTIMIZER_PATH)

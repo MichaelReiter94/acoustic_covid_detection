@@ -80,6 +80,15 @@ class CustomDataset(Dataset):
         return output_matrices
 
     def drop_invalid_labels(self):
+        # dicova_labels = pd.read_csv("data/Coswara_processed/dicova_test_set_id_matches.csv")
+        # dicova_ids = list(dicova_labels["user ID"])
+        # for participant in self.participants:
+        #     if participant.id in dicova_ids:
+        #         if dicova_labels[dicova_labels["user ID"] == participant.id]["COVID_STATUS"].item() == "n":
+        #             participant.meta_data["covid_label"] = 0
+        #         else:
+        #             participant.meta_data["covid_label"] = 1
+
         self.participants = [participant for participant in self.participants if participant.get_label() is not None]
 
 
