@@ -12,8 +12,9 @@ from torch import cuda
 
 def get_bag_statistics(y, batch_size, bag_size):
     y = y.view(batch_size, bag_size)
-    print(f"min: {round(float(y.min(dim=1)[0].mean().detach()), 1)}  |  "
-          f"max: {round(float(y.max(dim=1)[0].mean().detach()), 1)}")
+    if not torch.cuda.is_available():
+        print(f"min: {round(float(y.min(dim=1)[0].mean().detach()), 1)}  |  "
+              f"max: {round(float(y.max(dim=1)[0].mean().detach()), 1)}")
     # eps = 1e-6
     eps = 0
     mu = y.mean(dim=1)
@@ -156,8 +157,9 @@ class FeatureLevelMIL(nn.Module):
         attention_coef = attention_coef.view(batch_size, bag_size, 1)
         attention_coef = F.softmax(attention_coef, dim=1)
         # batchsize x bagsize x 1
-        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach()) * 100, 1)}  "
-              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach()) * 100, 1)}")
+        if not torch.cuda.is_available():
+            print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach()) * 100, 1)}  "
+                  f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach()) * 100, 1)}")
 
         x_combined_bag = y.view(batch_size, bag_size, self.resnet_out_features) * attention_coef
         # y = y.view(batch_size, bag_size, 1)
@@ -209,7 +211,8 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         attention_coef = attention_coef.view(batch_size, bag_size, 1)
         attention_coef = F.softmax(attention_coef, dim=1)
         # batchsize x bagsize x 1
-        print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach()) * 100, 1)}  "
+        if not torch.cuda.is_available():
+            print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach()) * 100, 1)}  "
               f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach()) * 100, 1)}")
 
         x_combined_bag = y.view(batch_size, bag_size, self.n_features) * attention_coef
@@ -601,9 +604,9 @@ class Resnet18MIL(nn.Module):
 
         # self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
         #                                                   last_layer=last_layer)
-        self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
-                                                          last_layer=last_layer)
-        # self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p, last_layer=last_layer)
+        # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
+        #                                                   last_layer=last_layer)
+        self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p, last_layer=last_layer)
         # self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention, n_neurons=n_hidden_attention,
         #                                                 dropout=dropout_p)
         self.batch_size, self.bag_size, self.feature_size = None, None, None

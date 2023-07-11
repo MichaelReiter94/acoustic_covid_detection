@@ -98,20 +98,26 @@ class CustomDataset(Dataset):
         df = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
         manually_identified_bad_ids = list(pd.read_excel
                                            (r"data/Coswara_processed/bad ids from listening and analysis.xlsx",
-                                           sheet_name=self.types_of_recording, usecols=["ID"]).ID)
+                                           sheet_name=self.types_of_recording, usecols=["ID"], nrows=150).ID.dropna())
         audio_quality_thresh = self.min_audio_quality
         low_audio_quality_ids = []
         if self.types_of_recording == "combined_breaths":
-            # there are 3 categories of audio qulaity with 0 being the worst and 2 being the best
+            # there are 3 categories of audio quality with 0 being the worst and 2 being the best
+
+            # TODO check if it  makes it better or worse when i exclude participants with AT LEAST 1 recording with
+            #  quality 0 compared to excluding only participants where ALL recordings have a quality rating of 0
             low_audio_quality_ids = list(df[(df["audio_quality_breathing-shallow"] < audio_quality_thresh) |
                                             (df["audio_quality_breathing-deep"] < audio_quality_thresh)]["user_id"])
         elif self.types_of_recording == "combined_coughs":
             low_audio_quality_ids = list(df[(df["audio_quality_cough-heavy"] < audio_quality_thresh) |
                                             (df["audio_quality_cough-shallow"] < audio_quality_thresh)]["user_id"])
         elif self.types_of_recording == "combined_vowels":
-            low_audio_quality_ids = list(df[(df["vowel-a"] < audio_quality_thresh) |
-                                            (df["vowel-e"] < audio_quality_thresh) |
-                                            (df["vowel-o"] < audio_quality_thresh)]["user_id"])
+            low_audio_quality_ids = list(df[(df["audio_quality_vowel-a"] < audio_quality_thresh) |
+                                            (df["audio_quality_vowel-e"] < audio_quality_thresh) |
+                                            (df["audio_quality_vowel-o"] < audio_quality_thresh)]["user_id"])
+        elif self.types_of_recording == "combined_speech":
+            low_audio_quality_ids = list(df[(df["audio_quality_counting-normal"] < audio_quality_thresh) |
+                                            (df["audio_quality_counting-fast"] < audio_quality_thresh)]["user_id"])
         else:
             print("You are not using combined sound recordings. There is no code for checcking for the audio quality "
                   "of those separate recordings")

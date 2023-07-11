@@ -42,7 +42,7 @@ from audiomentations import Compose, AddGaussianNoise, PitchShift, HighPassFilte
 
 
 class AudioRecording:
-    def __init__(self, data_path, type_of_recording, audio_parameters, augmentations=None):
+    def __init__(self, data_path, type_of_recording, audio_parameters, augmentations=None, meta_data=None):
         combined_recordings = {
             "combined_coughs": ["cough-heavy", "cough-shallow"],
             "combined_breaths": ["breathing-deep", "breathing-shallow"],
@@ -56,7 +56,7 @@ class AudioRecording:
                 self.file_path.append(f"{os.path.join(data_path, combined_rec_type)}.wav".replace("\\", "/"))
         else:
             self.file_path = f"{os.path.join(data_path, type_of_recording)}.wav".replace("\\", "/")
-
+        self.meta_data = meta_data
         self.recording_type = type_of_recording
         self.augmentations = augmentations
         self.hop_size = audio_parameters["hop_size"]
@@ -116,6 +116,14 @@ class AudioRecording:
         else:
             audio = np.array([]).astype("float32")
             for path in self.file_path:
+
+                filename = os.path.splitext(os.path.basename(path))[0]
+                audio_quality_key = [key for key in self.meta_data.keys() if filename in key and "audio_quality" in key][0]
+                # print(self.meta_data[audio_quality_key])
+                if self.meta_data[audio_quality_key] < 1:
+                    print("skipping")
+                    continue
+
                 audio_temp, sr = librosa.load(path, sr=None)
                 if trim_silence_below_x_dB is not None:
                     audio_temp, _ = librosa.effects.trim(audio_temp, top_db=trim_silence_below_x_dB)

@@ -47,6 +47,7 @@ dataset_collection = {
     "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel.pickle",
+        # "participants_file": "2023_07_08_logmel_combined_coughs_11msHop_23msFFT_fmax11000_224logmel_EXTENDED.pickle",
         "augmented_files": ["2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmelaugmented"
                             ".pickle"]
     },
@@ -658,6 +659,7 @@ if __name__ == "__main__":
 
         tracker.setup_run_with_new_params(p)
         for random_seed in random_seeds[:n_cross_validation_runs]:
+            # highest_score = 0
             # <editor-fold desc="#####################################  SETUP ########################################">
             summarize_cuda_memory_usage()
             tracker.start_run_with_random_seed(random_seed)
@@ -715,18 +717,10 @@ if __name__ == "__main__":
                     # auc_roc = tracker.get_epoch_metrics()["auc_roc"]
                     if eval_metric > highest_score:
                         model_weights = my_cnn.state_dict()
-                        model_save_name = f"{date}_epoch{epoch}_evalMetric_{np.round(eval_metric*100, 1)}"
+                        model_save_name = f"{date}_epoch{epoch}_evalMetric_{np.round(eval_metric*100, 1)}_{train_set.types_of_recording} "
 
                         highest_score = eval_metric
                         training_params = p
-
-                if isinstance(lr_scheduler, ReduceLROnPlateau):
-                    lr_scheduler.step(epoch_loss_train)
-                else:
-                    lr_scheduler.step()
-                if TESTING_MODE:
-                    print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
-                          f" --> {round(lr_scheduler._last_lr[-1], 8)}")
                 # #####################################     EVALUATE TEST SET      #####################################
                 if EVALUATE_TEST_SET:
                     # print("  #######   TEST SET     #######")
@@ -736,6 +730,14 @@ if __name__ == "__main__":
                             for i, batch in enumerate(test_loader):
                                 evaluate_batch(my_cnn, batch, loss_func, tracker)
                         write_metrics(mode="test")
+
+                if isinstance(lr_scheduler, ReduceLROnPlateau):
+                    lr_scheduler.step(epoch_loss_train)
+                else:
+                    lr_scheduler.step()
+                if TESTING_MODE:
+                    print(f"current learning rates: {round(lr_scheduler._last_lr[0], 8)} "
+                          f" --> {round(lr_scheduler._last_lr[-1], 8)}")
             # ##########################################################################################################
             if VERBOSE:
                 delta_t = time.time() - epoch_start
@@ -744,17 +746,27 @@ if __name__ == "__main__":
         if TRACK_METRICS:
             with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
                 pickle.dump(tracker, f)
-    if SAVE_TO_DISC:
-        print(f"saving new model! From the Parameter Run:\n"
-              f"{training_params}")
-        MODEL_PATH = f"data/Coswara_processed/models/{model_save_name}_seed{random_seed}.pth"
-        torch.save(model_weights, MODEL_PATH)
-    # save last iteration of training
-    # FINAL_MODEL_PATH = f"data/Coswara_processed/models/{date}_" \
-    #                    f"finalepoch_evalMetric_{np.round(eval_metric*100, 1)}.pth"
-    # torch.save(my_cnn.state_dict(), FINAL_MODEL_PATH)
 
-    # print("done")
-    # optimizer.zero_grad()
-    # OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
-    # torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
+        if SAVE_TO_DISC:
+            print(f"saving new model! From the Parameter Run:\n"
+                  f"{training_params}")
+            MODEL_PATH = f"data/Coswara_processed/models/{model_save_name}_seed{random_seed}.pth"
+            torch.save(model_weights, MODEL_PATH)
+        # save last iteration of training
+        # FINAL_MODEL_PATH = f"data/Coswara_processed/models/{date}_" \
+        #                    f"finalepoch_evalMetric_{np.round(eval_metric*100, 1)}.pth"
+        # torch.save(my_cnn.state_dict(), FINAL_MODEL_PATH)
+
+        # print("done")
+        # optimizer.zero_grad()
+        # OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
+        # torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
+        if True:
+            threshold = 3
+            mean_loss = {sample: np.mean(val) for sample, val in loss_by_sample_tracking.items()}
+            worst_samples = {sample: val for sample, val in mean_loss.items() if val > threshold}
+            worst_samples_df = pd.DataFrame(list(worst_samples.items()), columns=["id", "mean_loss"])
+            worst_samples_df.to_csv(f"{date}_worst_samples_{train_set.types_of_recording}_seed{random_seed}.csv",
+                                    index=False)
+            # import matplotlib.pyplot as plt
+            # plt.hist(mean_loss.values(), 30)

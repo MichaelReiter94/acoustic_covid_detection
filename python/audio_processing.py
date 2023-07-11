@@ -19,7 +19,7 @@ from tqdm import tqdm
 import pandas as pd
 from datetime import datetime
 from utils.utils import audiomentations_repr
-
+# import math
 # </editor-fold>
 # def create_participant_objects(save_to: str,
 #                                augmentations=None,
@@ -99,6 +99,9 @@ def contains_only_good_audio(participant_metadata, types_of_recording, ID):
                 recording_quality = participant_metadata[f"audio_quality_{combined_rec_type}"].item()
                 if recording_quality == 0:
                     return False
+                # if recording_quality > 0 or math.isnan(recording_quality):
+                #     return True
+
         else:
             recording_quality = participant_metadata[f"audio_quality_{rec_type}"].item()
 

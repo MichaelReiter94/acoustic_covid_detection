@@ -17,6 +17,10 @@ class Participant:
         data_directory = "data/Coswara_processed/Recordings"
         file_path_participant = os.path.join(data_directory, self.id).replace("\\", "/")
         self.recordings = {}
+
+        data = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
+        self.meta_data = data[data["user_id"] == self.id].to_dict("records")[0]
+
         # for recording_name in all_types_of_recording:
         #     if recording_name in types_of_recording:
         #         self.recordings[recording_name] = AudioRecording(data_path=file_path_participant,
@@ -31,7 +35,8 @@ class Participant:
             self.recordings[recording_name] = AudioRecording(data_path=file_path_participant,
                                                              type_of_recording=recording_name,
                                                              audio_parameters=audio_params,
-                                                             augmentations=augmentations)
+                                                             augmentations=augmentations,
+                                                             meta_data=self.meta_data)
 
         # if types_of_recording == "cough-heavy":
         #     self.heavy_cough = AudioRecording(self.file_path_participant, "cough-heavy", audio_params, augmentations)
@@ -50,8 +55,7 @@ class Participant:
         # self.vowel_a = AudioRecording(self.file_path_participant, "vowel-a", audio_params, augmentations)
         # self.vowel_e = AudioRecording(self.file_path_participant, "vowel-e", audio_params, augmentations)
         # self.vowel_o = AudioRecording(self.file_path_participant, "vowel-o", audio_params, augmentations)
-        data = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
-        self.meta_data = data[data["user_id"] == self.id].to_dict("records")[0]
+
         # creates an additional column for pandas dataframe index that is not really needed or wanted
 
     def get_label(self):
