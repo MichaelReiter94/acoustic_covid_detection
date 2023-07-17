@@ -217,10 +217,10 @@ class FeatureSet:
 
 
 time_domain_augmentations = Compose([
-    AddGaussianNoise(min_amplitude=0.0003, max_amplitude=0.01, p=0.8),
-    PitchShift(min_semitones=-2, max_semitones=2, p=0.8),
-    TimeStretch(min_rate=0.95, max_rate=1.05, leave_length_unchanged=False, p=0.8),
-    Gain(min_gain_in_db=-18, max_gain_in_db=12, p=0.8)
+    AddGaussianNoise(min_amplitude=0.0003, max_amplitude=0.01, p=0.6),
+    PitchShift(min_semitones=-2, max_semitones=2, p=0.6),
+    TimeStretch(min_rate=0.95, max_rate=1.05, leave_length_unchanged=False, p=0.6),
+    Gain(min_gain_in_db=-18, max_gain_in_db=12, p=0.6)
 ])
 all_types_of_recording = ["cough-heavy", "cough-shallow", "breathing-deep", "breathing-shallow", "counting-fast",
                           "counting-normal", "vowel-a", "vowel-e", "vowel-o"]
@@ -238,14 +238,14 @@ audio_parameters = dict(
     n_features=224,  # 15 | 224
     sample_rate=22050,
     n_fft=512 * 16,
-    window_length=512,
-    hop_size=256,
+    window_length=1024,
+    hop_size=512,
     fmin=0,
     fmax=22050 // 2
 )
 
 if __name__ == "__main__":
-    feature_set = FeatureSet("combined_coughs", audio_parameters)
+    feature_set = FeatureSet("combined_speech", audio_parameters)
     feature_set.create_participant_objects(augmentations=time_domain_augmentations,
-                                           augmentations_per_label=(1, 4))
-    feature_set.save_to("NEW_11msHop_23msFFT_fmax11000_224logmel")
+                                           augmentations_per_label=(0, 1))
+    feature_set.save_to("NEW_23msHop_46msFFT_fmax11000_224logmel_0x1x")

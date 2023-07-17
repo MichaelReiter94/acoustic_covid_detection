@@ -2,7 +2,7 @@ import pandas as pd
 from audio_processing import FeatureSet
 from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50, BrogrammersMIL, \
     Resnet18MIL, PredLevelMIL
-from evaluation_and_tracking import IntraEpochMetricsTracker
+from evaluation_and_tracking import IntraEpochMetricsTracker, IDPerformanceTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift, TransferFunctionSim, RandomGain
 from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, MultipleInstanceLearningMFCC, MILResnet
 from datetime import datetime
@@ -33,11 +33,11 @@ mpl.rcParams["savefig.directory"] = "../documentation/imgs"
 # <editor-fold desc="#########################  SETTIGNS AND CONSTANTS and constants #################################">
 dataset_collection = {
     "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel": {
-            "dataset_class": ResnetLogmelDataset,
-            "participants_file": "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
-            "augmented_files": ["2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
-                                ".pickle"]
-        },
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
+        "augmented_files": ["2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
+                            ".pickle"]
+    },
     "2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmel.pickle",
@@ -51,7 +51,6 @@ dataset_collection = {
         "augmented_files": ["2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmelaugmented"
                             ".pickle"]
     },
-
 
     "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
@@ -275,6 +274,11 @@ highest_score = 0
 training_params = None
 loss_by_sample_tracking = {}
 loss_by_sample_tracking_train = {}
+
+threshold = None if LOAD_FROM_DISC else 0.75
+id_performance = IDPerformanceTracker(ID_PERFORMANCE_TRACKING, threshold=threshold)
+
+
 # </editor-fold>
 
 # <editor-fold desc="#################################  FUNCTION DEFINITIONS   #######################################">
@@ -401,7 +405,7 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
     current_optimizer.step()
 
 
-def evaluate_batch(model, current_batch, loss_function, my_tracker):
+def evaluate_batch(model, current_batch, loss_function, my_tracker, set_type):
     current_batch, sample_ids = current_batch[:2], current_batch[2]
 
     model.eval()
@@ -411,18 +415,30 @@ def evaluate_batch(model, current_batch, loss_function, my_tracker):
     if prediction.dim() == 0:
         prediction = torch.unsqueeze(prediction, dim=0)
     loss, loss_per_sample = loss_function(prediction, label)
-    try:
-        last_aucroc = my_tracker.crossval_runs[-1].runs[-1].metrics["eval"]["auc_roc"][-1]
-    except IndexError:
-        last_aucroc = 0
-    if last_aucroc > 0.75:
-        loss_per_sample = loss_per_sample.cpu().detach().numpy()
-        for idx, sample_id in enumerate(sample_ids):
-            if sample_id not in loss_by_sample_tracking:
-                loss_by_sample_tracking[sample_id] = []
-            loss_by_sample_tracking[sample_id].append(loss_per_sample[idx])
-        # pred_after_sigmoid = torch.sigmoid(prediction)
-        # accuracy = get_accuracy(prediction, label)
+    # try:
+    #     last_aucroc = my_tracker.crossval_runs[-1].runs[-1].metrics["eval"]["auc_roc"][-1]
+    # except IndexError:
+    #     last_aucroc = 0
+    # # if last_aucroc > 0.75:
+    #
+    # if set_type == "eval":
+    #     loss_per_sample = loss_per_sample.cpu().detach().numpy()
+    #     prediction_per_sample = prediction.cpu().detach().numpy()
+    #     df = pd.DataFrame.from_dict({"ID": sample_ids,
+    #                                  "loss": loss_per_sample,
+    #                                  "prediction": prediction_per_sample})
+    #     df["rec_type"] = val_set.types_of_recording
+    #     id_performance.merge_dataframe(df, my_tracker)
+    new_df = id_performance.make_df(sample_ids=sample_ids, labels=label, loss=loss_per_sample, prediction=prediction,
+                                    set_type=set_type, rec_type=val_set.types_of_recording, seed=random_seed)
+    id_performance.merge_dataframe(new_df, my_tracker)
+
+    for idx, sample_id in enumerate(sample_ids):
+        if sample_id not in loss_by_sample_tracking:
+            loss_by_sample_tracking[sample_id] = []
+        loss_by_sample_tracking[sample_id].append(loss_per_sample[idx])
+    # pred_after_sigmoid = torch.sigmoid(prediction)
+    # accuracy = get_accuracy(prediction, label)
     my_tracker.add_metrics(loss, label, prediction)
 
 
@@ -501,6 +517,10 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
         train_ids = train_ids[:200]
         np.random.shuffle(validation_ids)
         validation_ids = validation_ids[:50]
+
+    if TRAIN_ON_FULL_SET:
+        train_ids = train_ids + validation_ids
+        validation_ids = test_ids
 
     if not params.use_augm_datasets:
         augmented_datasets = None
@@ -629,7 +649,7 @@ def write_metrics(mode):
     #     writer.add_scalar(f"07_TrueNegativeRate_or_Specificity/{mode}", metrics["tnr"], epoch)
     #     writer.add_scalar(f"08_Precision_or_PositivePredictiveValue/{mode}", metrics["precision"], epoch)
     #     writer.add_scalar(f"09_true_positives_at_95/{mode}", metrics["tpr_at_95"], epoch)
-    performance_eval_metric = (metrics["auc_roc"] +  metrics["accuracy"]) / 2
+    performance_eval_metric = (metrics["auc_roc"] + metrics["accuracy"]) / 2
     return metrics["loss"], performance_eval_metric
 
 
@@ -658,7 +678,9 @@ if __name__ == "__main__":
             VAL_SET_OVERSAMPLING_FACTOR = p.val_oversampl
 
         tracker.setup_run_with_new_params(p)
-        for random_seed in random_seeds[:n_cross_validation_runs]:
+        for seed_idx, random_seed in enumerate(random_seeds[:n_cross_validation_runs]):
+            # LOAD_FROM_DISC = LOAD_FROM_DISC_multipleSplits[seed_idx]
+
             # highest_score = 0
             # <editor-fold desc="#####################################  SETUP ########################################">
             summarize_cuda_memory_usage()
@@ -691,7 +713,8 @@ if __name__ == "__main__":
                 loss_func = FocalLoss(gamma=p.focal_loss, pos_weight=p.class_weight, reduction=loss_reduction,
                                       exclude_outliers=p.exclude_outliers).to(device)
             else:
-                loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight]), reduction=loss_reduction).to(device)
+                loss_func = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([p.class_weight]),
+                                                 reduction=loss_reduction).to(device)
             tracker.save_model_and_training_parameters(my_cnn, optimizer, loss_func)
             tracker.types_of_recording = train_set.types_of_recording
             tracker.audio_processing_params = train_set.audio_proc_params
@@ -702,6 +725,7 @@ if __name__ == "__main__":
             epoch_start = time.time()
             # </editor-fold>
             for epoch in range(n_epochs):
+
                 tracker.reset(p, mode="train")
                 for i, batch in enumerate(train_loader):
                     train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
@@ -710,14 +734,14 @@ if __name__ == "__main__":
                     tracker.reset(p, mode="eval")
                     for _ in range(VAL_SET_OVERSAMPLING_FACTOR):
                         for i, batch in enumerate(eval_loader):
-                            evaluate_batch(my_cnn, batch, loss_func, tracker)
+                            evaluate_batch(my_cnn, batch, loss_func, tracker, set_type="eval")
                     epoch_loss_val, eval_metric = write_metrics(mode="eval")
 
                 if SAVE_TO_DISC:
                     # auc_roc = tracker.get_epoch_metrics()["auc_roc"]
                     if eval_metric > highest_score:
                         model_weights = my_cnn.state_dict()
-                        model_save_name = f"{date}_epoch{epoch}_evalMetric_{np.round(eval_metric*100, 1)}_{train_set.types_of_recording} "
+                        model_save_name = f"{date}_epoch{epoch}_evalMetric_{np.round(eval_metric * 100, 1)}_{train_set.types_of_recording} "
 
                         highest_score = eval_metric
                         training_params = p
@@ -728,7 +752,7 @@ if __name__ == "__main__":
                         tracker.reset(p, mode="test")
                         for _ in range(VAL_SET_OVERSAMPLING_FACTOR):
                             for i, batch in enumerate(test_loader):
-                                evaluate_batch(my_cnn, batch, loss_func, tracker)
+                                evaluate_batch(my_cnn, batch, loss_func, tracker, set_type="test")
                         write_metrics(mode="test")
 
                 if isinstance(lr_scheduler, ReduceLROnPlateau):
@@ -770,3 +794,6 @@ if __name__ == "__main__":
                                     index=False)
             # import matplotlib.pyplot as plt
             # plt.hist(mean_loss.values(), 30)
+
+        if True:
+            id_performance.save()

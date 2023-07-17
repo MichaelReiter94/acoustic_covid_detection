@@ -1,9 +1,12 @@
+import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from sklearn.metrics import roc_curve, auc, precision_recall_curve, confusion_matrix
 import pandas as pd
 import plotly.graph_objects as go
+import os
 
 # class ModelEvaluator:
 #     def __init__(self):
@@ -465,12 +468,13 @@ class IntraEpochMetricsTracker:
         print(f"\nParameters used for finding the best performing epoch:")
         pretty_print_dict(self.performance_eval_params)
 
-    def get_metric_performance_df(self, include=("std", "params", "combined_params"), remove_columns=()):
+    def get_metric_performance_df(self, include=("std", "params", "combined_params"), remove_columns=(),
+                                  set_name="eval"):
         df = pd.DataFrame()
         for run in self.crossval_runs:
-            row = dict(run.best_performance_mean["eval"])
+            row = dict(run.best_performance_mean[set_name])
             if "std" in include:
-                row_std = dict(run.best_performance_std["eval"])
+                row_std = dict(run.best_performance_std[set_name])
                 row_temp = {}
                 for key, val in row.items():
                     row_temp[f"{key}"] = row[key]
@@ -1043,6 +1047,76 @@ class IntraEpochMetricsTracker:
             }
 
         }
+
+
+class IDPerformanceTracker:
+    def __init__(self, file_path, threshold=0.75):
+
+        self.file_name = "data/Coswara_processed/id_performance_tracking/" + file_path
+        if threshold is None or threshold == 0:
+            threshold = -1
+        self.threshold = threshold
+        if os.path.exists(self.file_name):
+            # self.df = pd.read_csv(self.file_name)
+            with open(self.file_name, 'rb') as file:
+                self.df = pickle.load(file)
+        else:
+            self.df = pd.DataFrame(columns=["ID", "label", "loss", "prediction", "rec_type", "seed", "set_type"])
+
+    def merge_dataframe(self, df_merge: pd.DataFrame, run_tracker: IntraEpochMetricsTracker):
+        # get the AUCROC of the last epoch. If there is no last epoch, do not track unless the
+        try:
+            last_aucroc = run_tracker.crossval_runs[-1].runs[-1].metrics["eval"]["auc_roc"][-1]
+        except IndexError:
+            last_aucroc = 0
+        if last_aucroc < self.threshold:
+            return
+
+        for _, row in df_merge.iterrows():
+            # TODO include seed, set type (and more?) that need to fit
+            idx = np.logical_and(self.df.ID == row.ID, self.df.rec_type == row.rec_type)
+            n_entries = len(self.df[idx])
+            if n_entries == 1:
+                df_idx = np.where(idx)[0][0]
+                self.df.at[df_idx, "loss"] = np.append(self.df.at[df_idx, "loss"],
+                                                       np.array(row["loss"]))
+                self.df.at[df_idx, "prediction"] = np.append(self.df.at[df_idx, "prediction"],
+                                                             np.array(row["prediction"]))
+            elif n_entries == 0:
+                row.at["loss"] = np.array([row.at["loss"]])
+                row.at["prediction"] = np.array([row.at["prediction"]])
+                # self.df = pd.concat([self.df, row], ignore_index=True, axis=0)
+                self.df = self.df.append(row, ignore_index=True)
+            else:
+                raise ValueError("there cannot be more than one entry with the same ID and rec type")
+        # return self.df
+
+    @staticmethod
+    def make_df(sample_ids, labels, loss, prediction, set_type, rec_type, seed):
+        loss_per_sample = loss.cpu().detach().numpy()
+        prediction_per_sample = prediction.cpu().detach().numpy()
+        labels = labels.cpu().detach().numpy()
+        df = pd.DataFrame.from_dict({"ID": sample_ids,
+                                     "label": labels,
+                                     "loss": loss_per_sample,
+                                     "prediction": prediction_per_sample})
+        df["rec_type"] = rec_type
+        df["seed"] = seed
+        df["set_type"] = set_type
+        return df
+
+    def save(self):
+        # self.df.to_csv(self.file_name, index=False)
+        with open(self.file_name, 'wb') as file:
+            pickle.dump(self.df, file)
+
+    def get_mean_of_col(self, column):
+        temp_df = self.df.copy()
+        temp_df[f"{column}_mean"] = self.df[column].apply(lambda x: np.mean(x))
+        return temp_df
+
+    def __len__(self):
+        return len(self.df)
 
 
 if __name__ == "__main__":

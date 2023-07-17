@@ -18,7 +18,6 @@ parameters = dict(
     dropout_p=[0.1, 0.25],
     focal_loss=[0],
     exclude_outliers=[0],
-    min_quality=["t1val1"],
     use_resnorm=[False],
     val_oversampl=[6]
 )
