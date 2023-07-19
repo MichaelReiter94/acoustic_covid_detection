@@ -61,8 +61,8 @@ parameters = dict(
 DATASET_NAME = "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel"
 
 RUN_COMMENT = f"hyperparams_MIL"
-n_epochs = 1
-n_cross_validation_runs = 3
+n_epochs = 2
+n_cross_validation_runs = 1
 USE_MIL = False
 MODEL_NAME = "resnet18"
 
@@ -111,7 +111,8 @@ SAVE_TO_DISC = False
 EVALUATE_TEST_SET = False
 TRAIN_ON_FULL_SET = False
 
-ID_PERFORMANCE_TRACKING = "garbage.pickle"
+# ID_PERFORMANCE_TRACKING = "garbage.pickle"
+ID_PERFORMANCE_TRACKING = None
 
 # ###########################################   DO NOT CHANGE LINES BELOW   ############################################
 if isinstance(LOAD_FROM_DISC, str):

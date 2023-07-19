@@ -1051,7 +1051,11 @@ class IntraEpochMetricsTracker:
 
 class IDPerformanceTracker:
     def __init__(self, file_path, threshold=0.75):
-        self.file_name = "data/Coswara_processed/id_performance_tracking/" + file_path
+        if file_path is not None:
+            self.file_name = "data/Coswara_processed/id_performance_tracking/" + file_path
+        else:
+            self.file_name = None
+
         if threshold is None or threshold == 0:
             threshold = -1
         self.threshold = threshold
@@ -1064,6 +1068,8 @@ class IDPerformanceTracker:
         self.df = pd.DataFrame(columns=["ID", "label", "loss", "prediction", "rec_type", "seed", "set_type"])
 
     def load(self):
+        if self.file_name is None:
+            return pd.DataFrame()
         if os.path.exists(self.file_name):
             with open(self.file_name, 'rb') as file:
                 df = pickle.load(file)
@@ -1073,6 +1079,9 @@ class IDPerformanceTracker:
 
     def merge_dataframe(self, df_merge: pd.DataFrame, run_tracker: IntraEpochMetricsTracker):
         # get the AUCROC of the last epoch. If there is no last epoch, do not track unless the
+        if self.file_name is None:
+            return
+
         if run_tracker is not None:
             try:
                 last_aucroc = run_tracker.crossval_runs[-1].runs[-1].metrics["eval"]["auc_roc"][-1]
@@ -1105,8 +1114,9 @@ class IDPerformanceTracker:
                 raise ValueError("there cannot be more than one entry with the same ID and rec type")
         # return self.df
 
-    @staticmethod
-    def make_df(sample_ids, labels, loss, prediction, set_type, rec_type, seed):
+    def make_df(self, sample_ids, labels, loss, prediction, set_type, rec_type, seed):
+        if self.file_name is None:
+            return pd.DataFrame()
         loss_per_sample = loss.cpu().detach().numpy()
         prediction_per_sample = prediction.cpu().detach().numpy()
         labels = labels.cpu().detach().numpy()
@@ -1120,6 +1130,8 @@ class IDPerformanceTracker:
         return df
 
     def save(self):
+        if self.file_name is None:
+            return
         # self.df.to_csv(self.file_name, index=False)
         with open(self.file_name, 'wb') as file:
             pickle.dump(self.df, file)
