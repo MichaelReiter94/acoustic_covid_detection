@@ -11,7 +11,9 @@ import pandas as pd
 
 class CustomDataset(Dataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode=None, min_audio_quality=1):
+                 verbose=True, mode=None, min_audio_quality=1, exclude_confidently_misclassified=None):
+        if exclude_confidently_misclassified is None:
+            raise ValueError("exclude_confidently_misclassified must be set to either true or false")
 
         if mode is None:
             print("no mode (train or eval) specified for dataset")
@@ -43,9 +45,13 @@ class CustomDataset(Dataset):
 
         self.participants = [part for part in self.participants if part.id in user_ids]
 
-
         self.drop_invalid_labels()
         self.drop_bad_audio()
+        if self.mode == "train" and exclude_confidently_misclassified:
+            print("before: ", self.__len__())
+            self.drop_confidently_misclassified_samples(threshold=2)
+            print("after: ", self.__len__())
+
         self.labels = np.array([int(participant.get_label()) for participant in self.participants])
         self.mu, self.sigma = self.get_feature_statistics()
         if verbose:
@@ -91,14 +97,18 @@ class CustomDataset(Dataset):
 
         self.participants = [participant for participant in self.participants if participant.get_label() is not None]
 
-
+    def drop_confidently_misclassified_samples(self, threshold=2.5):
+        df = pd.read_excel(
+            "data/Coswara_processed/id_performance_tracking/01_detected_confident_misclassifiactions.xlsx")
+        confidently_misclassified_ids = list(df[df.mean_loss > threshold].ID)
+        self.participants = [part for part in self.participants if part.id not in confidently_misclassified_ids]
 
     def drop_bad_audio(self):
         # TODO do the same thing for other types of recording
         df = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
         manually_identified_bad_ids = list(pd.read_excel
                                            (r"data/Coswara_processed/bad ids from listening and analysis.xlsx",
-                                           sheet_name=self.types_of_recording, usecols=["ID"], nrows=150).ID.dropna())
+                                            sheet_name=self.types_of_recording, usecols=["ID"], nrows=150).ID.dropna())
         audio_quality_thresh = self.min_audio_quality
         low_audio_quality_ids = []
         if self.types_of_recording == "combined_breaths":
@@ -123,8 +133,6 @@ class CustomDataset(Dataset):
                   "of those separate recordings")
         all_bad_ids = manually_identified_bad_ids + low_audio_quality_ids
         self.participants = [part for part in self.participants if part.id not in all_bad_ids]
-
-
 
     def get_input_features(self, idx, for_mix_up=False):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
@@ -220,11 +228,12 @@ class CustomDataset(Dataset):
 
 class BrogrammersMFCCDataset(CustomDataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode="train", min_audio_quality=1):
+                 verbose=True, mode="train", min_audio_quality=1, exclude_confidently_misclassified=None):
         self.n_channels = 1
         self.n_timesteps = 259
         super(BrogrammersMFCCDataset, self).__init__(user_ids, original_files, transform, augmentations,
-                                                     augmented_files, verbose, mode, min_audio_quality)
+                                                     augmented_files, verbose, mode, min_audio_quality,
+                                                     exclude_confidently_misclassified)
 
     def get_input_features(self, idx, for_mix_up=False):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
@@ -247,12 +256,12 @@ class BrogrammersMFCCDataset(CustomDataset):
 
 class ResnetLogmelDataset(CustomDataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode=None, min_audio_quality=1):
+                 verbose=True, mode=None, min_audio_quality=1, exclude_confidently_misclassified=None):
         self.n_channels = 3
         self.n_timesteps = 224
         self.frequency_resolution = 224
-        super(ResnetLogmelDataset, self).__init__(user_ids, original_files, transform,
-                                                  augmentations, augmented_files, verbose, mode, min_audio_quality)
+        super(ResnetLogmelDataset, self).__init__(user_ids, original_files, transform, augmentations, augmented_files,
+                                                  verbose, mode, min_audio_quality, exclude_confidently_misclassified)
 
     # def get_input_features(self, idx):
     #     input_features = self.participants[idx].heavy_cough.logmel
@@ -306,11 +315,12 @@ class ResnetLogmelDataset(CustomDataset):
 
 class MultipleInstanceLearningMFCC(CustomDataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode="train", min_audio_quality=1):
+                 verbose=True, mode="train", min_audio_quality=1, exclude_confidently_misclassified=None):
         self.n_channels = 1
         self.n_timesteps = 259
         super(MultipleInstanceLearningMFCC, self).__init__(user_ids, original_files, transform, augmentations,
-                                                           augmented_files, verbose, mode, min_audio_quality)
+                                                           augmented_files, verbose, mode, min_audio_quality,
+                                                           exclude_confidently_misclassified)
 
     def get_input_features(self, idx, for_mix_up=False):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
@@ -342,13 +352,12 @@ class MultipleInstanceLearningMFCC(CustomDataset):
 
 class MILResnet(CustomDataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode=None, min_audio_quality=1):
+                 verbose=True, mode=None, min_audio_quality=1, exclude_confidently_misclassified=None):
         self.n_channels = 3
         self.n_timesteps = 224
         self.frequency_resolution = 224
         super(MILResnet, self).__init__(user_ids, original_files, transform, augmentations, augmented_files, verbose,
-                                        mode, min_audio_quality)
-
+                                        mode, min_audio_quality, exclude_confidently_misclassified)
 
     def get_input_features(self, idx, for_mix_up=False):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
@@ -371,7 +380,6 @@ class MILResnet(CustomDataset):
         input_features = torch.Tensor(input_features)
 
         return input_features
-
 
     @staticmethod
     def get_feature_statistics():

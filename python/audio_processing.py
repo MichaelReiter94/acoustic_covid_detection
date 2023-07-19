@@ -248,4 +248,4 @@ if __name__ == "__main__":
     feature_set = FeatureSet("combined_speech", audio_parameters)
     feature_set.create_participant_objects(augmentations=time_domain_augmentations,
                                            augmentations_per_label=(0, 1))
-    feature_set.save_to("NEW_23msHop_46msFFT_fmax11000_224logmel_0x1x")
+    feature_set.save_to("04_23msHop_46msFFT_fmax11000_224logmel_0x1x")

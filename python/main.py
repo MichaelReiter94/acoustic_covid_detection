@@ -275,8 +275,6 @@ training_params = None
 loss_by_sample_tracking = {}
 loss_by_sample_tracking_train = {}
 
-threshold = None if LOAD_FROM_DISC else 0.75
-id_performance = IDPerformanceTracker(ID_PERFORMANCE_TRACKING, threshold=threshold)
 
 
 # </editor-fold>
@@ -530,14 +528,17 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
     training_set = DatasetClass(user_ids=train_ids, original_files=dataset_dict["participants_file"],
                                 transform=transform, augmented_files=augmented_datasets,
                                 augmentations=train_augmentation, verbose=VERBOSE, mode="train",
-                                min_audio_quality=1)
+                                min_audio_quality=1, exclude_confidently_misclassified=params.exclude_conf_miscl)
     validation_set = DatasetClass(user_ids=validation_ids, original_files=dataset_dict["participants_file"],
-                                  transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=1)
+                                  transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=1,
+                                  exclude_confidently_misclassified=False)
 
     test_set = None
     if EVALUATE_TEST_SET:
         test_set = DatasetClass(user_ids=test_ids, original_files=dataset_dict["participants_file"],
-                                transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=1)
+                                transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=1,
+                                exclude_confidently_misclassified=False
+                                )
 
     training_set.mix_up_alpha = params.mixup_a
     training_set.mix_up_probability = params.mixup_p
@@ -684,6 +685,9 @@ if __name__ == "__main__":
             # highest_score = 0
             # <editor-fold desc="#####################################  SETUP ########################################">
             summarize_cuda_memory_usage()
+            threshold = None if LOAD_FROM_DISC else 0.75
+            id_performance = IDPerformanceTracker(ID_PERFORMANCE_TRACKING, threshold=threshold)
+
             tracker.start_run_with_random_seed(random_seed)
             train_set, val_set, test_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
                                                         train_augmentation=augmentations, random_seed=random_seed,
@@ -767,6 +771,9 @@ if __name__ == "__main__":
                 delta_t = time.time() - epoch_start
                 print(f"Run {p} took [{int(delta_t // 60)}min {int(delta_t % 60)}s] to calculate")
 
+            saved_df = id_performance.load()
+            id_performance.merge_dataframe(saved_df, run_tracker=None)
+            id_performance.save()
         if TRACK_METRICS:
             with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
                 pickle.dump(tracker, f)
@@ -785,15 +792,12 @@ if __name__ == "__main__":
         # optimizer.zero_grad()
         # OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
         # torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
-        if True:
-            threshold = 3
-            mean_loss = {sample: np.mean(val) for sample, val in loss_by_sample_tracking.items()}
-            worst_samples = {sample: val for sample, val in mean_loss.items() if val > threshold}
-            worst_samples_df = pd.DataFrame(list(worst_samples.items()), columns=["id", "mean_loss"])
-            worst_samples_df.to_csv(f"{date}_worst_samples_{train_set.types_of_recording}_seed{random_seed}.csv",
-                                    index=False)
+        # if True:
+        #     threshold = 3
+        #     mean_loss = {sample: np.mean(val) for sample, val in loss_by_sample_tracking.items()}
+        #     worst_samples = {sample: val for sample, val in mean_loss.items() if val > threshold}
+        #     worst_samples_df = pd.DataFrame(list(worst_samples.items()), columns=["id", "mean_loss"])
+        #     worst_samples_df.to_csv(f"{date}_worst_samples_{train_set.types_of_recording}_seed{random_seed}.csv",
+        #                             index=False)
             # import matplotlib.pyplot as plt
             # plt.hist(mean_loss.values(), 30)
-
-        if True:
-            id_performance.save()

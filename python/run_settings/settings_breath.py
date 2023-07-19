@@ -28,9 +28,9 @@ import os
 
 parameters = dict(
     batch=[64],
-    lr=[3e-4, 1e-4, 7e-5],
+    lr=[3e-4, 7e-5],
     wd=[1e-4],
-    lr_decay=[0.995],
+    lr_decay=[0.99],
     mixup_a=[0.2],
     mixup_p=[0.8],
     use_augm_datasets=[False],
@@ -40,10 +40,10 @@ parameters = dict(
     class_weight=[1],
     bag_size=[16],
     n_MIL_Neurons=[32],
-    time_steps=[224, 336],
+    time_steps=[224],
     lr_in=[None],
     lr_mil=[1e1],
-    dropout_p=[0.1, 0.25],
+    dropout_p=[0.1],
     focal_loss=[0],
     exclude_outliers=[0],
     use_resnorm=[False],
@@ -54,9 +54,9 @@ parameters = dict(
 # VAL_SET_OVERSAMPLING_FACTOR = parameters["val_oversampl"]
 
 DATASET_NAME = "logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel"
-RUN_COMMENT = f"hyperparams"
-n_epochs = 150
-n_cross_validation_runs = 1
+RUN_COMMENT = f"crossval_saveIDPerformance"
+n_epochs = 175
+n_cross_validation_runs = 5
 USE_MIL = False
 MODEL_NAME = "resnet18"
 
@@ -66,8 +66,17 @@ SAMPLES_PER_EPOCH = 1024
 
 LOAD_FROM_DISC = False
 # LOAD_FROM_DISC = r"data\Coswara_processed\models\2023-06-12_resnet18_23ms_82_7_AUCROC_iter74.pth"
+
+SAVE_TO_DISC = False
+EVALUATE_TEST_SET = False
+TRAIN_ON_FULL_SET = False
+
+ID_PERFORMANCE_TRACKING = "find_confidently_misclassified.pickle"
+
+# ###########################################   DO NOT CHANGE LINES BELOW   ############################################
+
 if isinstance(LOAD_FROM_DISC, str):
     LOAD_FROM_DISC = os.path.join(*LOAD_FROM_DISC.split("\\"))
-
-SAVE_TO_DISC = True
-EVALUATE_TEST_SET = False
+if TRAIN_ON_FULL_SET:
+    RUN_COMMENT += "_trainOnFullSet"
+    EVALUATE_TEST_SET = False

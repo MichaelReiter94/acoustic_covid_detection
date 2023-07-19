@@ -1051,30 +1051,44 @@ class IntraEpochMetricsTracker:
 
 class IDPerformanceTracker:
     def __init__(self, file_path, threshold=0.75):
-
         self.file_name = "data/Coswara_processed/id_performance_tracking/" + file_path
         if threshold is None or threshold == 0:
             threshold = -1
         self.threshold = threshold
+        # if os.path.exists(self.file_name):
+        #     # self.df = pd.read_csv(self.file_name)
+        #     with open(self.file_name, 'rb') as file:
+        #         self.df = pickle.load(file)
+        # else:
+        #     self.df = pd.DataFrame(columns=["ID", "label", "loss", "prediction", "rec_type", "seed", "set_type"])
+        self.df = pd.DataFrame(columns=["ID", "label", "loss", "prediction", "rec_type", "seed", "set_type"])
+
+    def load(self):
         if os.path.exists(self.file_name):
-            # self.df = pd.read_csv(self.file_name)
             with open(self.file_name, 'rb') as file:
-                self.df = pickle.load(file)
+                df = pickle.load(file)
         else:
-            self.df = pd.DataFrame(columns=["ID", "label", "loss", "prediction", "rec_type", "seed", "set_type"])
+            df = pd.DataFrame(columns=["ID", "label", "loss", "prediction", "rec_type", "seed", "set_type"])
+        return df
 
     def merge_dataframe(self, df_merge: pd.DataFrame, run_tracker: IntraEpochMetricsTracker):
         # get the AUCROC of the last epoch. If there is no last epoch, do not track unless the
-        try:
-            last_aucroc = run_tracker.crossval_runs[-1].runs[-1].metrics["eval"]["auc_roc"][-1]
-        except IndexError:
-            last_aucroc = 0
-        if last_aucroc < self.threshold:
-            return
+        if run_tracker is not None:
+            try:
+                last_aucroc = run_tracker.crossval_runs[-1].runs[-1].metrics["eval"]["auc_roc"][-1]
+            except IndexError:
+                last_aucroc = 0.0
+            if last_aucroc < self.threshold:
+                return
+        else:
+            last_aucroc = 1.0
 
         for _, row in df_merge.iterrows():
             # TODO include seed, set type (and more?) that need to fit
             idx = np.logical_and(self.df.ID == row.ID, self.df.rec_type == row.rec_type)
+            idx = np.logical_and(idx, self.df.set_type == row.set_type)
+            idx = np.logical_and(idx, self.df.seed == row.seed)
+
             n_entries = len(self.df[idx])
             if n_entries == 1:
                 df_idx = np.where(idx)[0][0]
@@ -1083,8 +1097,8 @@ class IDPerformanceTracker:
                 self.df.at[df_idx, "prediction"] = np.append(self.df.at[df_idx, "prediction"],
                                                              np.array(row["prediction"]))
             elif n_entries == 0:
-                row.at["loss"] = np.array([row.at["loss"]])
-                row.at["prediction"] = np.array([row.at["prediction"]])
+                row.at["loss"] = np.array([row.at["loss"]]).squeeze()
+                row.at["prediction"] = np.array([row.at["prediction"]]).squeeze()
                 # self.df = pd.concat([self.df, row], ignore_index=True, axis=0)
                 self.df = self.df.append(row, ignore_index=True)
             else:
