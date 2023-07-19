@@ -272,8 +272,6 @@ model_weights = None
 model_save_name = None
 highest_score = 0
 training_params = None
-loss_by_sample_tracking = {}
-loss_by_sample_tracking_train = {}
 
 
 
@@ -377,16 +375,6 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
     if prediction.dim() == 0:
         prediction = torch.unsqueeze(prediction, dim=0)
     loss, loss_per_sample = current_loss_func(prediction, label)
-    try:
-        last_aucroc = my_tracker.crossval_runs[-1].runs[-1].metrics["eval"]["auc_roc"][-1]
-    except IndexError:
-        last_aucroc = 0
-    if last_aucroc > 0.75:
-        loss_per_sample = loss_per_sample.cpu().detach().numpy()
-        for idx, sample_id in enumerate(sample_ids):
-            if sample_id not in loss_by_sample_tracking_train:
-                loss_by_sample_tracking_train[sample_id] = []
-            loss_by_sample_tracking_train[sample_id].append(loss_per_sample[idx])
 
     if loss == torch.nan or loss > 10:
         print(loss)
@@ -413,28 +401,9 @@ def evaluate_batch(model, current_batch, loss_function, my_tracker, set_type):
     if prediction.dim() == 0:
         prediction = torch.unsqueeze(prediction, dim=0)
     loss, loss_per_sample = loss_function(prediction, label)
-    # try:
-    #     last_aucroc = my_tracker.crossval_runs[-1].runs[-1].metrics["eval"]["auc_roc"][-1]
-    # except IndexError:
-    #     last_aucroc = 0
-    # # if last_aucroc > 0.75:
-    #
-    # if set_type == "eval":
-    #     loss_per_sample = loss_per_sample.cpu().detach().numpy()
-    #     prediction_per_sample = prediction.cpu().detach().numpy()
-    #     df = pd.DataFrame.from_dict({"ID": sample_ids,
-    #                                  "loss": loss_per_sample,
-    #                                  "prediction": prediction_per_sample})
-    #     df["rec_type"] = val_set.types_of_recording
-    #     id_performance.merge_dataframe(df, my_tracker)
     new_df = id_performance.make_df(sample_ids=sample_ids, labels=label, loss=loss_per_sample, prediction=prediction,
                                     set_type=set_type, rec_type=val_set.types_of_recording, seed=random_seed)
     id_performance.merge_dataframe(new_df, my_tracker)
-
-    for idx, sample_id in enumerate(sample_ids):
-        if sample_id not in loss_by_sample_tracking:
-            loss_by_sample_tracking[sample_id] = []
-        loss_by_sample_tracking[sample_id].append(loss_per_sample[idx])
     # pred_after_sigmoid = torch.sigmoid(prediction)
     # accuracy = get_accuracy(prediction, label)
     my_tracker.add_metrics(loss, label, prediction)
@@ -792,12 +761,4 @@ if __name__ == "__main__":
         # optimizer.zero_grad()
         # OPTIMIZER_PATH = f"data/Coswara_processed/models/{MODEL_NAME}/optimizer.pickle"
         # torch.save(optimizer.state_dict(), OPTIMIZER_PATH)
-        # if True:
-        #     threshold = 3
-        #     mean_loss = {sample: np.mean(val) for sample, val in loss_by_sample_tracking.items()}
-        #     worst_samples = {sample: val for sample, val in mean_loss.items() if val > threshold}
-        #     worst_samples_df = pd.DataFrame(list(worst_samples.items()), columns=["id", "mean_loss"])
-        #     worst_samples_df.to_csv(f"{date}_worst_samples_{train_set.types_of_recording}_seed{random_seed}.csv",
-        #                             index=False)
-            # import matplotlib.pyplot as plt
-            # plt.hist(mean_loss.values(), 30)
+
