@@ -48,9 +48,8 @@ class CustomDataset(Dataset):
         self.drop_invalid_labels()
         self.drop_bad_audio()
         if self.mode == "train" and exclude_confidently_misclassified:
-            print("before: ", self.__len__())
             self.drop_confidently_misclassified_samples(threshold=2)
-            print("after: ", self.__len__())
+        self.drop_below_age(age_thresh=15)
 
         self.labels = np.array([int(participant.get_label()) for participant in self.participants])
         self.mu, self.sigma = self.get_feature_statistics()
@@ -102,6 +101,11 @@ class CustomDataset(Dataset):
             "data/Coswara_processed/id_performance_tracking/01_detected_confident_misclassifiactions.xlsx")
         confidently_misclassified_ids = list(df[df.mean_loss > threshold].ID)
         self.participants = [part for part in self.participants if part.id not in confidently_misclassified_ids]
+
+    def drop_below_age(self, age_thresh=15):
+        self.participants = [part for part in self.participants if part.meta_data.get("age") >= age_thresh]
+
+
 
     def drop_bad_audio(self):
         # TODO do the same thing for other types of recording

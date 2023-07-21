@@ -42,13 +42,14 @@ def get_bag_statistics(y, batch_size, bag_size):
 
 
 class PredictionLevelMILSingleGatedLayer(nn.Module):
-    def __init__(self, n_neurons, dropout, last_layer):
+    def __init__(self, n_neurons, dropout, last_layer, resnet_out_features):
         super().__init__()
         self.n_bag_statistics = 9
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
+
         if last_layer is None:
-            self.resnet_out_features = 512
+            self.resnet_out_features = resnet_out_features
             self.binary_classification_layer = nn.Sequential(
                 nn.Linear(self.resnet_out_features, 1),
             )
@@ -84,13 +85,13 @@ class PredictionLevelMILSingleGatedLayer(nn.Module):
 
 
 class PredictionLevelMILDoubleDenseLayer(nn.Module):
-    def __init__(self, n_neurons, dropout, last_layer):
+    def __init__(self, n_neurons, dropout, last_layer, resnet_out_features):
         super().__init__()
         self.n_bag_statistics = 9
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
         if last_layer is None:
-            self.resnet_out_features = 512
+            self.resnet_out_features = resnet_out_features
             self.binary_classification_layer = nn.Sequential(
                 nn.Linear(self.resnet_out_features, 1),
             )
@@ -116,11 +117,11 @@ class PredictionLevelMILDoubleDenseLayer(nn.Module):
 
 
 class FeatureLevelMIL(nn.Module):
-    def __init__(self, n_neurons, dropout, last_layer):
+    def __init__(self, n_neurons, dropout, last_layer, resnet_out_features):
         super().__init__()
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
-        self.resnet_out_features = 512
+        self.resnet_out_features = resnet_out_features
 
         self.attention_V = nn.Sequential(
             nn.Linear(self.resnet_out_features, self.n_hidden_attention),
@@ -172,12 +173,13 @@ class FeatureLevelMIL(nn.Module):
 
 
 class FeatureLevelMILExtraFeatureLayer(nn.Module):
-    def __init__(self, n_features, n_neurons, dropout):
+    def __init__(self, n_features, n_neurons, dropout, resnet_out_features):
         super().__init__()
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
-        self.resnet_out_features = 512
+        self.resnet_out_features = resnet_out_features
         self.n_features = n_features
+        
 
         self.feature_layer = nn.Sequential(
             nn.Linear(self.resnet_out_features, self.n_features),
@@ -213,7 +215,7 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         # batchsize x bagsize x 1
         if not torch.cuda.is_available():
             print(f"min: {round(float(attention_coef.min(dim=1)[0].mean().detach()) * 100, 1)}  "
-              f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach()) * 100, 1)}")
+                  f"|  max: {round(float(attention_coef.max(dim=1)[0].mean().detach()) * 100, 1)}")
 
         x_combined_bag = y.view(batch_size, bag_size, self.n_features) * attention_coef
         # y = y.view(batch_size, bag_size, 1)
@@ -412,16 +414,98 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
     return my_model
 
 
-def get_resnet50():
-    TIMESTEPS = 224
-    FREQUNCY_BINS = 224
-    N_CHANNELS = 3
+def get_resnet50(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1,
+                 load_from_disc=False):
     my_model = resnet50(weights=ResNet50_Weights.DEFAULT)
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
+    device = "cuda" if cuda.is_available() else "cpu"
+
+    # my_model = resnet18()  # not pretrained
     # for param in my_model.parameters():
     #     param.requires_grad = False
+
+    ########################### change number of finput channels from 3 to 1 #################################
+    # (either use the pretrained weights of 1 channel or average them over all 3)
+
+    if N_CHANNELS == 1:
+        weights = my_model.conv1.weight
+        # weights_mean = weights.mean(dim=1).unsqueeze(dim=1)
+        weights_single_color = weights[:, 0, :, :].unsqueeze(dim=1)
+
+        my_model.conv1 = nn.Conv2d(N_CHANNELS, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False)
+        # my_model.conv1.weight = nn.Parameter(weights_mean)
+        my_model.conv1.weight = nn.Parameter(weights_single_color)
+
+    ############################  add residual normalization layers to resnet  ################################
+    gamma = 0.5
+    if add_residual_layers:
+        layers = summary(my_model, input_size=(1, N_CHANNELS, FREQUNCY_BINS, TIMESTEPS))
+        layers = str(layers).split("\n")
+        layers = [layer for layer in layers if "BatchNorm2d: 3" in layer]
+        fdims = [int(layer.split("[")[1].split("]")[0].split(",")[2]) for layer in layers]
+
+        # for every major layer (which is hardcoded for resnet18) we iterate over each BasicBlock in this layer and add
+        # a residual normalization layer after the batch norm. such a basic block (for resnet18) has 2 batch norm layers
+        # might need changes for resnet50 etc
+        layers = [my_model.layer1, my_model.layer2, my_model.layer3, my_model.layer4]
+        counter = 0
+        for layer in layers:
+            for i in range(len(layer)):
+                layer[i].bn1 = nn.Sequential(
+                    layer[i].bn1,
+                    # ResidualInstanceNorm2d(num_features=layer[i].conv1.out_channels, gamma=gamma,
+                    #                        gamma_is_learnable=True)
+                    ResidualInstanceNorm2d(num_features=fdims[counter], gamma=gamma,
+                                           affine=True, track_running_stats=False, gamma_is_learnable=True)
+                    # ResidualBatchNorm2d(num_features=fdims[counter], gamma=gamma,
+                    #                     affine=True, track_running_stats=True, gamma_is_learnable=True)
+                )
+                counter += 1
+                # layer[i].bn2 = nn.Sequential(
+                #     layer[i].bn2,
+                #     # ResidualInstanceNorm2d(num_features=layer[i].conv2.out_channels, gamma=gamma,
+                #     #                        gamma_is_learnable=True)
+                #     ResidualInstanceNorm2d(num_features=fdims[counter], gamma=gamma,
+                #                            affine=True, track_running_stats=False, gamma_is_learnable=True)
+                # )
+                counter += 1
+                counter += 1
+
+    ############################  add dropouts (spatial and regular) to resnet  ################################
+    if dropout_p > 0:
+        my_model.layer1 = nn.Sequential(*my_model.layer1, nn.Dropout2d(p=dropout_p))
+        my_model.layer2 = nn.Sequential(*my_model.layer2, nn.Dropout2d(p=dropout_p))
+        my_model.layer3 = nn.Sequential(*my_model.layer3, nn.Dropout2d(p=dropout_p))
+        my_model.layer4 = nn.Sequential(*my_model.layer4, nn.Dropout2d(p=dropout_p))
+        my_model.avgpool = nn.Sequential(my_model.avgpool, nn.Dropout(p=dropout_p))
+
     n_features = my_model.fc.in_features
     my_model.fc = nn.Linear(n_features, 1)
+
+    if isinstance(load_from_disc, bool):
+        if load_from_disc:
+            try:
+                # TODO if load_from_disc is a path, directly load it. no browsing for a file (if the path exists)
+                # if the path does not exist probably raise an error
+                window = tk.Tk()
+
+                path = askopenfilename(initialdir=f"data/Coswara_processed/models")
+                print(f"Path to pretrained model:\n{path}")
+                # path = f"data/Coswara_processed/models/{model_name}/model.pth"
+                my_model.load_state_dict(torch.load(path, map_location=torch.device(device)))
+                window.destroy()
+
+                # for param in my_model.parameters():
+                #     param.requires_grad = False
+
+                print("model weights loaded from disc")
+            except FileNotFoundError:
+                print("no saved model parameters found")
+    elif isinstance(load_from_disc, str):
+        path = load_from_disc
+        print(f"Path to pretrained model:\n{path}")
+        my_model.load_state_dict(torch.load(path, map_location=torch.device(device)))
+
     return my_model
 
 
@@ -589,12 +673,20 @@ class Resnet18MILOld(nn.Module):
         return y_pred
 
 
-class Resnet18MIL(nn.Module):
+class ResnetMIL(nn.Module):
     def __init__(self, n_hidden_attention=32, dropout_p=0.0, add_residual_layers=False, F=224, T=224, C=1,
-                 load_from_disc=False):
+                 load_from_disc=False, resnet_name=None):
         super().__init__()
-        self.resnet = get_resnet18(dropout_p=dropout_p, add_residual_layers=add_residual_layers,
-                                   FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C, load_from_disc=load_from_disc)
+        if resnet_name == "Resnet18_MIL":
+            self.resnet = get_resnet18(dropout_p=dropout_p, add_residual_layers=add_residual_layers,
+                                       FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C, load_from_disc=load_from_disc)
+            self.fc_layer_neurons = 512
+        elif resnet_name == "Resnet50_MIL":
+            self.resnet = get_resnet50(dropout_p=dropout_p, add_residual_layers=add_residual_layers,
+                                       FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C, load_from_disc=load_from_disc)
+            self.fc_layer_neurons = 2048
+        else:
+            raise ValueError("Please define which resnet size to use for this resnet MIL")
         # trim off the last dense layer [512 --> 1] to be able to add the MIL networks in all variations
 
         #  # uncomment this if you want to have the last dense layer from the resnet in the mil network instead.
@@ -603,12 +695,15 @@ class Resnet18MIL(nn.Module):
         self.resnet = torch.nn.Sequential(*(list(self.resnet.children())[:-1]))
 
         # self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
-        #                                                   last_layer=last_layer)
+        #                                                   last_layer=last_layer,
+        #                                                   resnet_out_features=self.fc_layer_neurons)
         # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
-        #                                                   last_layer=last_layer)
-        self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p, last_layer=last_layer)
+        #                                                   last_layer=last_layer,
+        #                                                   resnet_out_features=self.fc_layer_neurons)
+        self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p, last_layer=last_layer,
+                                       resnet_out_features=self.fc_layer_neurons)
         # self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention, n_neurons=n_hidden_attention,
-        #                                                 dropout=dropout_p)
+        #                                                 dropout=dropout_p, resnet_out_features=self.fc_layer_neurons)
         self.batch_size, self.bag_size, self.feature_size = None, None, None
 
     def forward(self, x):

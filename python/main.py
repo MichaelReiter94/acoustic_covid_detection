@@ -1,7 +1,7 @@
 import pandas as pd
 from audio_processing import FeatureSet
 from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50, BrogrammersMIL, \
-    Resnet18MIL, PredLevelMIL
+    ResnetMIL, PredLevelMIL
 from evaluation_and_tracking import IntraEpochMetricsTracker, IDPerformanceTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift, TransferFunctionSim, RandomGain
 from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, MultipleInstanceLearningMFCC, MILResnet
@@ -238,6 +238,8 @@ else:
 
 if MODEL_NAME == "resnet18" and USE_MIL:
     MODEL_NAME = "Resnet18_MIL"
+if MODEL_NAME == "resnet50" and USE_MIL:
+    MODEL_NAME = "Resnet50_MIL"
 elif MODEL_NAME == "brogrammers" and USE_MIL:
     MODEL_NAME = "MIL_brogrammers"
 
@@ -551,17 +553,18 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
         "resnet18": get_resnet18,
         "resnet50": get_resnet50,
         "MIL_brogrammers": BrogrammersMIL,
-        "Resnet18_MIL": Resnet18MIL,
+        "Resnet18_MIL": ResnetMIL,
+        "Resnet50_MIL": ResnetMIL,
         "PredictionLevelMIL_mfcc": PredLevelMIL
     }
     if model_name in ["MIL_brogrammers", "PredictionLevelMIL_mfcc"]:
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons).to(device)
-    elif model_name == "Resnet18_MIL":
+    elif model_name == "Resnet18_MIL" or model_name == "Resnet50_MIL":
         _, _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons, dropout_p=p.dropout_p,
                                           F=F, T=T, add_residual_layers=p.use_resnorm,
-                                          load_from_disc=load_from_disc).to(device)
-    elif model_name == "resnet18":
+                                          load_from_disc=load_from_disc, resnet_name=model_name).to(device)
+    elif model_name == "resnet18" or model_name == "resnet50":
         _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](dropout_p=p.dropout_p, FREQUNCY_BINS=F, TIMESTEPS=T,
                                           add_residual_layers=p.use_resnorm, load_from_disc=load_from_disc).to(device)
