@@ -1,3 +1,5 @@
+import torch
+
 from audio_recording import AudioRecording
 import os
 import pandas as pd
@@ -8,6 +10,27 @@ POSITIVE_LABELS = ["positive_mild", "positive_moderate", "positive_asymp"]
 UNKNOWN_LABELS = ["under_validation", "recovered_full"]
 all_types_of_recording = ["cough-heavy", "cough-shallow", "breathing-deep", "breathing-shallow", "counting-fast",
                           "counting-normal", "vowel-a", "vowel-e", "vowel-o"]
+transforms_for_metadata = {
+    "nan": 0,
+    "y": 1,
+    "True": 1,
+    "n": -1,
+    "False": -1,
+    "p": 1,
+    "rtpcr": 1,
+    "rat": 0.5,
+    "female": 1,
+    "male": -1,
+    "other": 0
+}
+# metadata_for_training = ["smoker", "cold", "hypertension", "diabetes",
+#                          "cough", "diarrheoa", "fever", "loss_of_smell", "muscle_pain", "breathing_difficulties",
+#                          "other_respiratory_illness", "fatigue", "sore_throat", "ischemic_heart_disease", "asthma",
+#                          "other_preexisting_condition", "chronic_lung_disease", "pneumonia",
+#                          "gender", "age", "type_of_covid_test", "vaccination_status"]
+metadata_for_training = ["smoker", "cold", "hypertension", "diabetes", "cough", "fever", "loss_of_smell",
+                         "muscle_pain",  "breathing_difficulties", "fatigue", "sore_throat", "asthma", "gender",
+                         "age", "type_of_covid_test", "vaccination_status"]
 
 
 class Participant:
@@ -81,3 +104,16 @@ class Participant:
 
     def __repr__(self):
         return f"class: {self.__class__.__name__} | id: {self.id} | label: {self.get_label()}"
+
+    def get_transformed_metadata(self):
+        transformed_metadata = {}
+        for item in metadata_for_training:
+            if item == "age":
+                transformed_metadata[item] = int(self.meta_data[item]) / 100
+            else:
+                transformed_metadata[item] = transforms_for_metadata[str(self.meta_data[item])]
+        return transformed_metadata
+
+    def get_transformed_metadata_tensor(self):
+        metadata = self.get_transformed_metadata()
+        return torch.Tensor(list(metadata.values()))

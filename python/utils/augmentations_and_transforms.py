@@ -54,7 +54,8 @@ class TransferFunctionSim:
             return tensor + torch.Tensor(self.get_tf(np.array(tensor)))
 
     def __repr__(self):
-        return self.__class__.__name__ + f"k={self.k}, sin_ratios={self.sinusoid_ratios}"
+        sinusoid_percentages = np.round(self.sinusoid_ratios/np.sum(self.sinusoid_ratios)*100, 0)
+        return self.__class__.__name__ + f" k={self.k}, sin_ratios={sinusoid_percentages}"
 
     def get_tf(self, tensor):
         n_freq_bins = tensor.shape[-2]
@@ -78,7 +79,7 @@ class TransferFunctionSim:
 class RandomGain:
     def __init__(self, min_gain=-9.0, max_gain=3.0):
         self.min_gain = min_gain
-        self.max_gain = max_gain
+        self.max_gain = -min_gain
         self.diff = self.max_gain - self.min_gain
 
     def __call__(self, tensor):

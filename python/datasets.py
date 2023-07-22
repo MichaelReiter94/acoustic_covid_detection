@@ -105,8 +105,6 @@ class CustomDataset(Dataset):
     def drop_below_age(self, age_thresh=15):
         self.participants = [part for part in self.participants if part.meta_data.get("age") >= age_thresh]
 
-
-
     def drop_bad_audio(self):
         # TODO do the same thing for other types of recording
         df = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
@@ -172,7 +170,8 @@ class CustomDataset(Dataset):
             elif input_features.dim() == 4:
                 input_features = input_features.expand(-1, 3, -1, -1)
 
-        return input_features, torch.tensor(output_label).float(), self.participants[idx].id
+        return input_features, torch.tensor(output_label).float(), self.participants[idx].id, \
+               self.participants[idx].get_transformed_metadata_tensor()
 
     def __len__(self):
         return len(self.participants)
@@ -188,7 +187,7 @@ class CustomDataset(Dataset):
         return label_count
 
     def get_input_shape(self):
-        in_features, _, _ = self.__getitem__(0)
+        in_features, _, _, _ = self.__getitem__(0)
         return in_features.shape
 
     def summarize(self):

@@ -1,7 +1,8 @@
 import pandas as pd
 from audio_processing import FeatureSet
 from models import BrogrammersModel, BrogrammersSequentialModel, get_resnet18, get_resnet50, BrogrammersMIL, \
-    ResnetMIL, PredLevelMIL
+    ResnetMIL
+# from models import PredLevelMIL
 from evaluation_and_tracking import IntraEpochMetricsTracker, IDPerformanceTracker
 from utils.augmentations_and_transforms import AddGaussianNoise, CyclicTemporalShift, TransferFunctionSim, RandomGain
 from datasets import ResnetLogmelDataset, BrogrammersMFCCDataset, MultipleInstanceLearningMFCC, MILResnet
@@ -262,7 +263,7 @@ else:
     TRACK_METRICS = True
 
 transforms = None
-augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift(), TransferFunctionSim()])
+# augmentations = Compose([AddGaussianNoise(0, 0.05), CyclicTemporalShift(), TransferFunctionSim()])
 
 random_seeds = [99468865, 215674, 3213213211, 55555555, 66445511337,
                 316497938271, 161094, 191919191, 101010107, 123587955]
@@ -307,7 +308,7 @@ def get_parameter_groups(model, output_lr, input_lr_coef, mil_lr_coef, weight_de
         for layer in mil_layers:
             params.append({'params': [p for n, p in model.named_parameters() if n == layer and p.requires_grad],
                            'lr': mil_lr,
-                           'weight_decay': weight_decay * 10})
+                           'weight_decay': weight_decay})
     parent_layers = []
     for layer in layer_names:
         if parent_layer(layer) not in parent_layers:
@@ -367,13 +368,16 @@ def get_parameter_combinations(param_dict, verbose=True):
 
 
 def train_on_batch(model, current_batch, current_loss_func, current_optimizer, my_tracker):
-    current_batch, sample_ids = current_batch[:2], current_batch[2]
+    current_batch, sample_ids, metadata = current_batch[:2], current_batch[2], current_batch[3]
 
     model.train()
     input_data, label = current_batch
     input_data, label = input_data.to(device), label.to(device)
+    if USE_MIL:
+        prediction = torch.squeeze(model(input_data, metadata=metadata))
+    else:
+        prediction = torch.squeeze(model(input_data))
 
-    prediction = torch.squeeze(model(input_data))
     if prediction.dim() == 0:
         prediction = torch.unsqueeze(prediction, dim=0)
     loss, loss_per_sample = current_loss_func(prediction, label)
@@ -394,12 +398,15 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
 
 
 def evaluate_batch(model, current_batch, loss_function, my_tracker, set_type):
-    current_batch, sample_ids = current_batch[:2], current_batch[2]
+    current_batch, sample_ids, metadata = current_batch[:2], current_batch[2], current_batch[3]
 
     model.eval()
     input_data, label = current_batch
     input_data, label = input_data.to(device), label.to(device)
-    prediction = torch.squeeze(model(input_data))
+    if USE_MIL:
+        prediction = torch.squeeze(model(input_data, metadata=metadata))
+    else:
+        prediction = torch.squeeze(model(input_data))
     if prediction.dim() == 0:
         prediction = torch.unsqueeze(prediction, dim=0)
     loss, loss_per_sample = loss_function(prediction, label)
@@ -537,7 +544,8 @@ def get_data_loaders(training_set, validation_set, testing_set, params):
         train = DataLoader(dataset=training_set, batch_size=p.batch, drop_last=True, sampler=sampler,
                            num_workers=n_workers)
     else:
-        train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=True, drop_last=True,
+        train = DataLoader(dataset=training_set, batch_size=p.batch, shuffle=False,
+                           drop_last=False,
                            num_workers=n_workers)
     val = DataLoader(dataset=validation_set, batch_size=p.batch, drop_last=False, num_workers=n_workers)
     test = None
@@ -555,7 +563,7 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
         "MIL_brogrammers": BrogrammersMIL,
         "Resnet18_MIL": ResnetMIL,
         "Resnet50_MIL": ResnetMIL,
-        "PredictionLevelMIL_mfcc": PredLevelMIL
+        # "PredictionLevelMIL_mfcc": PredLevelMIL
     }
     if model_name in ["MIL_brogrammers", "PredictionLevelMIL_mfcc"]:
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons).to(device)
@@ -630,10 +638,12 @@ def get_online_augmentations(run_parameters):
     if run_parameters.shift:
         augmentation = Compose([AddGaussianNoise(0, run_parameters.sigma),
                                 CyclicTemporalShift(),
-                                TransferFunctionSim(),
-                                RandomGain()])
+                                TransferFunctionSim(run_parameters.transfer_func_sim),
+                                RandomGain(run_parameters.random_gain)])
     else:
-        augmentation = Compose([AddGaussianNoise(0, run_parameters.sigma), TransferFunctionSim(), RandomGain()])
+        augmentation = Compose([AddGaussianNoise(0, run_parameters.sigma),
+                                TransferFunctionSim(run_parameters.transfer_func_sim),
+                                RandomGain(run_parameters.random_gain)])
     return augmentation
 
 
@@ -662,8 +672,9 @@ if __name__ == "__main__":
 
             tracker.start_run_with_random_seed(random_seed)
             train_set, val_set, test_set = get_datasets(DATASET_NAME, split_ratio=0.8, transform=transforms,
-                                                        train_augmentation=augmentations, random_seed=random_seed,
+                                                        train_augmentation=None, random_seed=random_seed,
                                                         params=p)
+            train_set.augmentations = get_online_augmentations(p)
 
             train_set.n_channels, val_set.n_channels = 1, 1
             train_set.n_timesteps, val_set.n_timesteps = p.time_steps, p.time_steps
@@ -672,7 +683,6 @@ if __name__ == "__main__":
                 test_set.n_channels = 1
                 test_set.n_timesteps = p.time_steps
                 test_set.bag_size = p.bag_size
-            train_set.augmentations = get_online_augmentations(p)
 
             if VAL_SET_OVERSAMPLING_FACTOR > 1:
                 val_set.augmentations = Compose([CyclicTemporalShift()])

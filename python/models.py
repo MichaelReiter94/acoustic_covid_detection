@@ -147,7 +147,7 @@ class FeatureLevelMIL(nn.Module):
         else:
             self.output_layer = last_layer
 
-    def forward(self, y, batch_size, bag_size):
+    def forward(self, y, batch_size, bag_size, metadata=None):
         # y = self.feature_layer(y.squeeze())
 
         y = y.squeeze()
@@ -179,7 +179,9 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         self.dropout = dropout
         self.resnet_out_features = resnet_out_features
         self.n_features = n_features
-        
+        n_metadata_categories = 16
+
+        torch.manual_seed(333666999)
 
         self.feature_layer = nn.Sequential(
             nn.Linear(self.resnet_out_features, self.n_features),
@@ -200,10 +202,13 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         )
 
         self.output_layer = nn.Sequential(
-            nn.Linear(self.n_features, 1)
+            nn.Linear(self.n_features + n_metadata_categories, 16),
+            # nn.ReLU(),
+            nn.Dropout(p=self.dropout),
+            nn.Linear(16, 1)
         )
 
-    def forward(self, y, batch_size, bag_size):
+    def forward(self, y, batch_size, bag_size, metadata):
         y = self.feature_layer(y.squeeze())
         # batchsize*bagsize x 512
 
@@ -222,6 +227,8 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         # [batchsize x bagsize x 512] * [batchsize x bagsize x 1]
         x_combined_bag = x_combined_bag.mean(dim=1)
         # [batch_size x 512]
+
+        x_combined_bag = torch.cat([x_combined_bag, metadata], dim=1)
         y_pred = self.output_layer(x_combined_bag)
         # [batch_size x 1]
         return y_pred
@@ -700,16 +707,16 @@ class ResnetMIL(nn.Module):
         # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
         #                                                   last_layer=last_layer,
         #                                                   resnet_out_features=self.fc_layer_neurons)
-        self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p, last_layer=last_layer,
-                                       resnet_out_features=self.fc_layer_neurons)
-        # self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention, n_neurons=n_hidden_attention,
-        #                                                 dropout=dropout_p, resnet_out_features=self.fc_layer_neurons)
+        # self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p, last_layer=last_layer,
+        #                                resnet_out_features=self.fc_layer_neurons)
+        self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention, n_neurons=n_hidden_attention,
+                                                        dropout=dropout_p, resnet_out_features=self.fc_layer_neurons)
         self.batch_size, self.bag_size, self.feature_size = None, None, None
 
-    def forward(self, x):
+    def forward(self, x, metadata=None):
         x = self.mil_reshape(x)
         y = self.resnet(x)
-        y = self.mil_net(y, self.batch_size, self.bag_size)
+        y = self.mil_net(y, self.batch_size, self.bag_size, metadata=metadata)
         return y
 
     def mil_reshape(self, x):
@@ -719,120 +726,120 @@ class ResnetMIL(nn.Module):
         x = x.view(self.batch_size * self.bag_size, *self.feature_size)
         return x
 
-
-class PredLevelMIL(nn.Module):  # brogrammers
-    def __init__(self, n_hidden_attention=32):
-        super().__init__()
-        TIMESTEPS = 259
-        MFCC_BINS = 15
-        self.input_size = (1, MFCC_BINS, TIMESTEPS)
-
-        n_filters1 = 64
-        n_filters2 = 32
-        torch.manual_seed(9876543210)
-
-        self.conv_layers = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=n_filters1, kernel_size=3),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(in_channels=n_filters1, out_channels=n_filters2, kernel_size=2),
-            nn.ReLU(),
-            nn.BatchNorm2d(n_filters2),
-            nn.Flatten(start_dim=1)
-        )
-
-        n_linear_params = ((TIMESTEPS - 2) // 2 - 1) * ((MFCC_BINS - 2) // 2 - 1) * n_filters2
-
-        self.linear_layers = nn.Sequential(
-            nn.Linear(in_features=n_linear_params, out_features=256),
-            nn.ReLU(),
-            nn.Dropout(p=0.5),
-            nn.Linear(in_features=256, out_features=128),
-            nn.ReLU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(in_features=128, out_features=1)
-        )
-
-        self.n_hidden_attention = n_hidden_attention
-        n_bag_statistics = 7
-
-        # # regular version of the MIL attention mechanism
-        # self.mil_attention = nn.Sequential(
-        #     nn.Linear(n_bag_statistics, self.n_hidden_attention),
-        #     nn.ReLU(),
-        #     # nn.Linear(self.n_hidden_attention, self.n_hidden_attention),
-        #     # nn.ReLU(),
-        #     nn.Linear(self.n_hidden_attention, 1),
-        # )
-
-        # gated attention mechanism as seen in Attention-based Deep Multiple Instance Learning by
-        # Maximilian Ilse, Jakub M. Tomczak, Max Welling
-        self.attention_V = nn.Sequential(
-            nn.Linear(n_bag_statistics, self.n_hidden_attention),
-            nn.Tanh()
-        )
-        self.attention_U = nn.Sequential(
-            nn.Linear(n_bag_statistics, self.n_hidden_attention),
-            nn.Sigmoid()
-        )
-        self.attention_out = nn.Linear(self.n_hidden_attention, 1)
-
-        print("loading Multiple Instance Learning model based on brogrammers")
-
-    def forward(self, x):
-        # x = x.squeeze(0)
-
-        batch_size, bag_size = x.shape[0], x.shape[1]
-        feature_size = x.shape[2:]
-        x = x.view(batch_size * bag_size, *feature_size)
-
-        # first dimenstion will be the batch size which will be set to 1. This is why it can be eliminated.
-        # the elements within a bag (dimension 1) will instead be kind of treated as batch size
-
-        x = self.conv_layers(x)
-        y = self.linear_layers(x)
-
-        y = y.view(batch_size, bag_size)
-
-        # y = torch.sigmoid(y)
-        # mu = y.mean()
-        # sigma = torch.pow(torch.mean(torch.pow(y - mu, 2.0)), 0.5)
-        # z_scores = (y - mu) / sigma
-        # skew = torch.mean(torch.pow(z_scores, 3))
-        # kurtoses = torch.mean(torch.pow(z_scores, 4))
-        # bag_statistics = torch.stack([mu, y.median(), sigma, y.min(), y.max(), skew, kurtoses])
-
-        mu = y.mean(dim=1)
-        diff = y.t() - mu
-        sigma = torch.pow(torch.mean(torch.pow(diff, 2.0), dim=0), 0.5)
-        z_scores = diff / sigma
-        skew = torch.mean(torch.pow(z_scores, 3), dim=0)
-        kurtoses = torch.mean(torch.pow(z_scores, 4), dim=0)
-
-        # bag_statistics = torch.stack([mu, y.median(), sigma, y.min(), y.max()])
-        median, _ = y.median(dim=1)
-        minimum, _ = y.min(dim=1)
-        maximum, _ = y.max(dim=1)
-        bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses]).t()
-
-        # y_pred = torch.stack([y.max()])
-        ###################################################     MIL    #################################################
-        # # regular version of the MIL attention mechanism
-        # y_pred = self.mil_attention(bag_statistics)
-        # gated attention mechanism
-        A_V = self.attention_V(bag_statistics)
-        A_U = self.attention_U(bag_statistics)
-        y_pred = self.attention_out(A_V * A_U)  # element wise multiplication
-
-        # needed for both MIL mechanisms
-        # attention_coef = torch.transpose(attention_coef, 1, 0)
-        # attention_coef = F.softmax(attention_coef, dim=1)
-        ################################################################################################################
-
-        # x_combined_bag = torch.mm(attention_coef, x)
-        # y_pred = self.output_layer(x_combined_bag)
-        # no sigmoid activation because the now used BCELossWithLogits class has the activation function included (
-        # which improves numerical stability/precision) Also this class has the possibility to add a weighting to the
-        # two classes to address class imbalance!! if BCELossWithLogits is not used uncomment the following line:
-        # y_pred = torch.sigmoid(y_pred)
-        return y_pred
+#
+# class PredLevelMIL(nn.Module):  # brogrammers
+#     def __init__(self, n_hidden_attention=32):
+#         super().__init__()
+#         TIMESTEPS = 259
+#         MFCC_BINS = 15
+#         self.input_size = (1, MFCC_BINS, TIMESTEPS)
+#
+#         n_filters1 = 64
+#         n_filters2 = 32
+#         torch.manual_seed(9876543210)
+#
+#         self.conv_layers = nn.Sequential(
+#             nn.Conv2d(in_channels=1, out_channels=n_filters1, kernel_size=3),
+#             nn.ReLU(),
+#             nn.MaxPool2d(kernel_size=2),
+#             nn.Conv2d(in_channels=n_filters1, out_channels=n_filters2, kernel_size=2),
+#             nn.ReLU(),
+#             nn.BatchNorm2d(n_filters2),
+#             nn.Flatten(start_dim=1)
+#         )
+#
+#         n_linear_params = ((TIMESTEPS - 2) // 2 - 1) * ((MFCC_BINS - 2) // 2 - 1) * n_filters2
+#
+#         self.linear_layers = nn.Sequential(
+#             nn.Linear(in_features=n_linear_params, out_features=256),
+#             nn.ReLU(),
+#             nn.Dropout(p=0.5),
+#             nn.Linear(in_features=256, out_features=128),
+#             nn.ReLU(),
+#             nn.Dropout(p=0.3),
+#             nn.Linear(in_features=128, out_features=1)
+#         )
+#
+#         self.n_hidden_attention = n_hidden_attention
+#         n_bag_statistics = 7
+#
+#         # # regular version of the MIL attention mechanism
+#         # self.mil_attention = nn.Sequential(
+#         #     nn.Linear(n_bag_statistics, self.n_hidden_attention),
+#         #     nn.ReLU(),
+#         #     # nn.Linear(self.n_hidden_attention, self.n_hidden_attention),
+#         #     # nn.ReLU(),
+#         #     nn.Linear(self.n_hidden_attention, 1),
+#         # )
+#
+#         # gated attention mechanism as seen in Attention-based Deep Multiple Instance Learning by
+#         # Maximilian Ilse, Jakub M. Tomczak, Max Welling
+#         self.attention_V = nn.Sequential(
+#             nn.Linear(n_bag_statistics, self.n_hidden_attention),
+#             nn.Tanh()
+#         )
+#         self.attention_U = nn.Sequential(
+#             nn.Linear(n_bag_statistics, self.n_hidden_attention),
+#             nn.Sigmoid()
+#         )
+#         self.attention_out = nn.Linear(self.n_hidden_attention, 1)
+#
+#         print("loading Multiple Instance Learning model based on brogrammers")
+#
+#     def forward(self, x):
+#         # x = x.squeeze(0)
+#
+#         batch_size, bag_size = x.shape[0], x.shape[1]
+#         feature_size = x.shape[2:]
+#         x = x.view(batch_size * bag_size, *feature_size)
+#
+#         # first dimenstion will be the batch size which will be set to 1. This is why it can be eliminated.
+#         # the elements within a bag (dimension 1) will instead be kind of treated as batch size
+#
+#         x = self.conv_layers(x)
+#         y = self.linear_layers(x)
+#
+#         y = y.view(batch_size, bag_size)
+#
+#         # y = torch.sigmoid(y)
+#         # mu = y.mean()
+#         # sigma = torch.pow(torch.mean(torch.pow(y - mu, 2.0)), 0.5)
+#         # z_scores = (y - mu) / sigma
+#         # skew = torch.mean(torch.pow(z_scores, 3))
+#         # kurtoses = torch.mean(torch.pow(z_scores, 4))
+#         # bag_statistics = torch.stack([mu, y.median(), sigma, y.min(), y.max(), skew, kurtoses])
+#
+#         mu = y.mean(dim=1)
+#         diff = y.t() - mu
+#         sigma = torch.pow(torch.mean(torch.pow(diff, 2.0), dim=0), 0.5)
+#         z_scores = diff / sigma
+#         skew = torch.mean(torch.pow(z_scores, 3), dim=0)
+#         kurtoses = torch.mean(torch.pow(z_scores, 4), dim=0)
+#
+#         # bag_statistics = torch.stack([mu, y.median(), sigma, y.min(), y.max()])
+#         median, _ = y.median(dim=1)
+#         minimum, _ = y.min(dim=1)
+#         maximum, _ = y.max(dim=1)
+#         bag_statistics = torch.stack([mu, median, sigma, minimum, maximum, skew, kurtoses]).t()
+#
+#         # y_pred = torch.stack([y.max()])
+#         ###################################################     MIL    #################################################
+#         # # regular version of the MIL attention mechanism
+#         # y_pred = self.mil_attention(bag_statistics)
+#         # gated attention mechanism
+#         A_V = self.attention_V(bag_statistics)
+#         A_U = self.attention_U(bag_statistics)
+#         y_pred = self.attention_out(A_V * A_U)  # element wise multiplication
+#
+#         # needed for both MIL mechanisms
+#         # attention_coef = torch.transpose(attention_coef, 1, 0)
+#         # attention_coef = F.softmax(attention_coef, dim=1)
+#         ################################################################################################################
+#
+#         # x_combined_bag = torch.mm(attention_coef, x)
+#         # y_pred = self.output_layer(x_combined_bag)
+#         # no sigmoid activation because the now used BCELossWithLogits class has the activation function included (
+#         # which improves numerical stability/precision) Also this class has the possibility to add a weighting to the
+#         # two classes to address class imbalance!! if BCELossWithLogits is not used uncomment the following line:
+#         # y_pred = torch.sigmoid(y_pred)
+#         return y_pred
