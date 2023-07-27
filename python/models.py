@@ -122,6 +122,7 @@ class FeatureLevelMIL(nn.Module):
         self.n_hidden_attention = n_neurons
         self.dropout = dropout
         self.resnet_out_features = resnet_out_features
+        torch.manual_seed(333666999)
 
         self.attention_V = nn.Sequential(
             nn.Linear(self.resnet_out_features, self.n_hidden_attention),
@@ -201,11 +202,13 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
             nn.Linear(self.n_hidden_attention, 1)
         )
 
+        # self.output_layer = nn.Sequential(
+        #     nn.Linear(self.n_features + n_metadata_categories, 16),
+        #     # nn.Dropout(p=self.dropout),
+        #     nn.Linear(16, 1),
+        # )
         self.output_layer = nn.Sequential(
-            nn.Linear(self.n_features + n_metadata_categories, 16),
-            # nn.ReLU(),
-            nn.Dropout(p=self.dropout),
-            nn.Linear(16, 1)
+            nn.Linear(self.n_features, 1),
         )
 
     def forward(self, y, batch_size, bag_size, metadata):
@@ -228,7 +231,7 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         x_combined_bag = x_combined_bag.mean(dim=1)
         # [batch_size x 512]
 
-        x_combined_bag = torch.cat([x_combined_bag, metadata], dim=1)
+        # x_combined_bag = torch.cat([x_combined_bag, metadata], dim=1)
         y_pred = self.output_layer(x_combined_bag)
         # [batch_size x 1]
         return y_pred
@@ -329,7 +332,10 @@ class BrogrammersSequentialModel(nn.Module):
 
 def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1,
                  load_from_disc=False):
+    # torch.manual_seed(333666999)
+    # my_model = resnet18(weights=None)
     my_model = resnet18(weights=ResNet18_Weights.DEFAULT)
+
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
     device = "cuda" if cuda.is_available() else "cpu"
 

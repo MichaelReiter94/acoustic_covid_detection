@@ -372,7 +372,7 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
 
     model.train()
     input_data, label = current_batch
-    input_data, label = input_data.to(device), label.to(device)
+    input_data, label, metadata = input_data.to(device), label.to(device), metadata.to(device)
     if USE_MIL:
         prediction = torch.squeeze(model(input_data, metadata=metadata))
     else:
@@ -402,7 +402,7 @@ def evaluate_batch(model, current_batch, loss_function, my_tracker, set_type):
 
     model.eval()
     input_data, label = current_batch
-    input_data, label = input_data.to(device), label.to(device)
+    input_data, label, metadata = input_data.to(device), label.to(device), metadata.to(device)
     if USE_MIL:
         prediction = torch.squeeze(model(input_data, metadata=metadata))
     else:
@@ -506,16 +506,17 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
     training_set = DatasetClass(user_ids=train_ids, original_files=dataset_dict["participants_file"],
                                 transform=transform, augmented_files=augmented_datasets,
                                 augmentations=train_augmentation, verbose=VERBOSE, mode="train",
-                                min_audio_quality=1, exclude_confidently_misclassified=params.exclude_conf_miscl)
+                                min_audio_quality=1, exclude_confidently_misclassified=params.exclude_conf_miscl,
+                                normalize=params.normalize)
     validation_set = DatasetClass(user_ids=validation_ids, original_files=dataset_dict["participants_file"],
                                   transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=1,
-                                  exclude_confidently_misclassified=False)
+                                  exclude_confidently_misclassified=False, normalize=params.normalize)
 
     test_set = None
     if EVALUATE_TEST_SET:
         test_set = DatasetClass(user_ids=test_ids, original_files=dataset_dict["participants_file"],
                                 transform=transform, verbose=VERBOSE, mode="eval", min_audio_quality=1,
-                                exclude_confidently_misclassified=False
+                                exclude_confidently_misclassified=False, normalize=params.normalize
                                 )
 
     training_set.mix_up_alpha = params.mixup_a
@@ -662,7 +663,8 @@ if __name__ == "__main__":
 
         tracker.setup_run_with_new_params(p)
         for seed_idx, random_seed in enumerate(random_seeds[:n_cross_validation_runs]):
-            # LOAD_FROM_DISC = LOAD_FROM_DISC_multipleSplits[seed_idx]
+            if LOAD_FROM_DISC_multipleSplits is not None:
+                LOAD_FROM_DISC = LOAD_FROM_DISC_multipleSplits[seed_idx]
 
             # highest_score = 0
             # <editor-fold desc="#####################################  SETUP ########################################">

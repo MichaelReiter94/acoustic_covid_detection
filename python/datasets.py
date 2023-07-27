@@ -11,7 +11,7 @@ import pandas as pd
 
 class CustomDataset(Dataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode=None, min_audio_quality=1, exclude_confidently_misclassified=None):
+                 verbose=True, mode=None, min_audio_quality=1, exclude_confidently_misclassified=None, normalize=None):
         if exclude_confidently_misclassified is None:
             raise ValueError("exclude_confidently_misclassified must be set to either true or false")
 
@@ -53,6 +53,12 @@ class CustomDataset(Dataset):
 
         self.labels = np.array([int(participant.get_label()) for participant in self.participants])
         self.mu, self.sigma = self.get_feature_statistics()
+
+        if normalize:
+            for part in self.participants:
+                feats = part.recordings[self.types_of_recording].features
+                part.recordings[self.types_of_recording].features = self.z_normalize(feats)
+
         if verbose:
             self.summarize()
 
@@ -179,8 +185,8 @@ class CustomDataset(Dataset):
     def get_object(self, idx):
         return self.participants[idx]
 
-    def z_normalize(self, mfccs):
-        return (mfccs - self.mu) / self.sigma
+    def z_normalize(self, features):
+        return (features - self.mu) / self.sigma
 
     def label_counts(self):
         label_count = np.unique(self.labels, return_counts=True)
@@ -195,13 +201,17 @@ class CustomDataset(Dataset):
         print(f"label count = {self.label_counts()}")
         # print(f"shape of input data without batch size: {self.get_input_shape()}")
 
-    @staticmethod
-    def get_feature_statistics():
-        # why do I have to convert it to float32???
-        mu = np.load("data/Coswara_processed/pickles/mean_cough_heavy_15MFCCs.npy")
-        mu = np.expand_dims(mu, axis=1).astype("float32")
-        sigma = np.load("data/Coswara_processed/pickles/stds_cough_heavy_15MFCCs.npy")
-        sigma = np.expand_dims(sigma, axis=1).astype("float32")
+    def get_feature_statistics(self):
+        # # why do I have to convert it to float32???
+        # mu = np.load("data/Coswara_processed/pickles/mean_cough_heavy_15MFCCs.npy")
+        # mu = np.expand_dims(mu, axis=1).astype("float32")
+        # sigma = np.load("data/Coswara_processed/pickles/stds_cough_heavy_15MFCCs.npy")
+        # sigma = np.expand_dims(sigma, axis=1).astype("float32")
+        rec_type = list(self.participants[0].recordings.keys())[0]
+        path = f"data/Coswara_processed/feature_statistics/{rec_type}_stats.npy"
+        loaded_stats = np.load(path)
+        mu, sigma = loaded_stats[0, :], loaded_stats[1, :]
+        mu, sigma = np.expand_dims(mu, axis=1), np.expand_dims(sigma, axis=1)
         return mu, sigma
 
     def mix_up(self, orig_sample, orig_label):
@@ -231,12 +241,13 @@ class CustomDataset(Dataset):
 
 class BrogrammersMFCCDataset(CustomDataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode="train", min_audio_quality=1, exclude_confidently_misclassified=None):
+                 verbose=True, mode="train", min_audio_quality=1, exclude_confidently_misclassified=None, normalize=None
+                 ):
         self.n_channels = 1
         self.n_timesteps = 259
         super(BrogrammersMFCCDataset, self).__init__(user_ids, original_files, transform, augmentations,
                                                      augmented_files, verbose, mode, min_audio_quality,
-                                                     exclude_confidently_misclassified)
+                                                     exclude_confidently_misclassified, normalize)
 
     def get_input_features(self, idx, for_mix_up=False):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
@@ -259,22 +270,23 @@ class BrogrammersMFCCDataset(CustomDataset):
 
 class ResnetLogmelDataset(CustomDataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode=None, min_audio_quality=1, exclude_confidently_misclassified=None):
+                 verbose=True, mode=None, min_audio_quality=1, exclude_confidently_misclassified=None, normalize=None):
         self.n_channels = 3
         self.n_timesteps = 224
         self.frequency_resolution = 224
         super(ResnetLogmelDataset, self).__init__(user_ids, original_files, transform, augmentations, augmented_files,
-                                                  verbose, mode, min_audio_quality, exclude_confidently_misclassified)
+                                                  verbose, mode, min_audio_quality, exclude_confidently_misclassified,
+                                                  normalize)
 
     # def get_input_features(self, idx):
     #     input_features = self.participants[idx].heavy_cough.logmel
     #     input_features = self.transform(input_features)
     #     return input_features
 
-    @staticmethod
-    def get_feature_statistics():
-        # do nothing - no normalization
-        return 0., 1.
+    # @staticmethod
+    # def get_feature_statistics():
+    #     # do nothing - no normalization
+    #     return 0., 1.
 
 
 # class ResnetLogmel3Channels(CustomDataset):
@@ -318,12 +330,13 @@ class ResnetLogmelDataset(CustomDataset):
 
 class MultipleInstanceLearningMFCC(CustomDataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode="train", min_audio_quality=1, exclude_confidently_misclassified=None):
+                 verbose=True, mode="train", min_audio_quality=1, exclude_confidently_misclassified=None, normalize=None
+                 ):
         self.n_channels = 1
         self.n_timesteps = 259
         super(MultipleInstanceLearningMFCC, self).__init__(user_ids, original_files, transform, augmentations,
                                                            augmented_files, verbose, mode, min_audio_quality,
-                                                           exclude_confidently_misclassified)
+                                                           exclude_confidently_misclassified, normalize)
 
     def get_input_features(self, idx, for_mix_up=False):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
@@ -355,12 +368,12 @@ class MultipleInstanceLearningMFCC(CustomDataset):
 
 class MILResnet(CustomDataset):
     def __init__(self, user_ids, original_files, transform=None, augmentations=None, augmented_files=None,
-                 verbose=True, mode=None, min_audio_quality=1, exclude_confidently_misclassified=None):
+                 verbose=True, mode=None, min_audio_quality=1, exclude_confidently_misclassified=None, normalize=None):
         self.n_channels = 3
         self.n_timesteps = 224
         self.frequency_resolution = 224
         super(MILResnet, self).__init__(user_ids, original_files, transform, augmentations, augmented_files, verbose,
-                                        mode, min_audio_quality, exclude_confidently_misclassified)
+                                        mode, min_audio_quality, exclude_confidently_misclassified, normalize)
 
     def get_input_features(self, idx, for_mix_up=False):
         input_features = self.participants[idx].recordings[self.types_of_recording].features
@@ -384,7 +397,7 @@ class MILResnet(CustomDataset):
 
         return input_features
 
-    @staticmethod
-    def get_feature_statistics():
-        # do nothing - no normalization
-        return 0., 1.
+    # @staticmethod
+    # def get_feature_statistics():
+    #     # do nothing - no normalization
+    #     return 0., 1.
