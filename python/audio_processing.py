@@ -238,14 +238,21 @@ audio_parameters = dict(
     n_features=224,  # 15 | 224
     sample_rate=22050,
     n_fft=512 * 16,
-    window_length=1024,
+    window_length=2048,
     hop_size=512,
     fmin=0,
     fmax=22050 // 2
 )
 
 if __name__ == "__main__":
-    feature_set = FeatureSet("combined_speech", audio_parameters)
-    feature_set.create_participant_objects(augmentations=time_domain_augmentations,
-                                           augmentations_per_label=(0, 1))
-    feature_set.save_to("04_23msHop_46msFFT_fmax11000_224logmel_0x1x")
+    n_pos = 1  # create 'n_pos' augmented samples for each positively labelled participant in each dataset
+    n_neg = 0  # create 'n_neg' augmented samples for each negatively labelled participant in each dataset
+    rec_type = "combined_vowels"  # combined_coughs, combined_breaths, combined_vowels, combined_speech
+    n_augmented_datasets = 4
+
+    for i in range(n_augmented_datasets):
+        save_string = f"_0{i}_23msHop_96msFFT_fmax11000_{n_neg}xNeg_{n_pos}xPos_"
+        feature_set = FeatureSet(rec_type, audio_parameters)
+        feature_set.create_participant_objects(augmentations=time_domain_augmentations,
+                                               augmentations_per_label=(n_neg, n_pos))
+        feature_set.save_to(save_string)

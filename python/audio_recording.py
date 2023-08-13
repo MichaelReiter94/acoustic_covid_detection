@@ -1,9 +1,14 @@
 import os
 import librosa
-import sounddevice as sd
 import numpy as np
 import librosa.display
 import matplotlib.pyplot as plt
+import torch
+# if not torch.cuda.is_available():
+try:
+    import sounddevice as sd
+except OSError:
+    print("sounddevice module not imported due to OSError")
 from audiomentations import Compose, AddGaussianNoise, PitchShift, HighPassFilter, Gain, Shift, TimeStretch, Trim
 
 

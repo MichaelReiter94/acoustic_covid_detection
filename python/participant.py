@@ -5,6 +5,7 @@ import os
 import pandas as pd
 
 # not necessary anymore... only here to remember which labels were chosen to be positive or negative
+# no_resp_illness_exposed means
 NEGATIVE_LABELS = ["healthy", "resp_illness_not_identified", "no_resp_illness_exposed"]
 POSITIVE_LABELS = ["positive_mild", "positive_moderate", "positive_asymp"]
 UNKNOWN_LABELS = ["under_validation", "recovered_full"]

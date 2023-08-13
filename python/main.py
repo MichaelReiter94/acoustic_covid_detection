@@ -16,7 +16,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision.transforms import ToTensor, Compose
 from torchinfo import summary
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 from collections import namedtuple
 from itertools import product
 import os
@@ -29,28 +29,63 @@ from torch import cuda
 from utils.utils import FocalLoss
 import sys
 import matplotlib as mpl
+import platform
 
 mpl.rcParams["savefig.directory"] = "../documentation/imgs"
 # <editor-fold desc="#########################  SETTIGNS AND CONSTANTS and constants #################################">
 dataset_collection = {
+    # "logmel_combined_speech_NEW_23msHop_46msFFT_multiple_augmented_sets": {
+    #     "dataset_class": ResnetLogmelDataset,
+    #     "participants_file": "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
+    #     "augmented_files": [
+    #         "2023_07_17_logmel_combined_speech_01_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+    #         "2023_07_17_logmel_combined_speech_02_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+    #         "2023_07_17_logmel_combined_speech_03_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+    #         "2023_07_17_logmel_combined_speech_04_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+    #         "2023_07_17_logmel_combined_speech_10_23msHop_46msFFT_fmax11000_224logmel_1x0xaugmented.pickle",
+    #     ]
+    # },
+
     "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": ["2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
-                            ".pickle"]
+        # "augmented_files": ["2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
+        #                     ".pickle"]
+        "augmented_files": [
+            "2023_07_17_logmel_combined_speech_01_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+            "2023_07_17_logmel_combined_speech_02_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+            "2023_07_17_logmel_combined_speech_03_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+            "2023_07_17_logmel_combined_speech_04_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+            "2023_07_17_logmel_combined_speech_10_23msHop_46msFFT_fmax11000_224logmel_1x0xaugmented.pickle",
+        ]
     },
     "2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": ["2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmelaugmented"
-                            ".pickle"]
+        # "augmented_files": ["2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmelaugmented"
+        #                     ".pickle"]
+        "augmented_files": [
+            "2023_08_12_logmel_combined_vowels__00_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_vowels__01_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_vowels__02_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_vowels__03_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_vowels__00_23msHop_96msFFT_fmax11000_1xNeg_0xPos_augmented.pickle",
+            # TODO check if these are named correctly
+        ]
     },
     "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel.pickle",
         # "participants_file": "2023_07_08_logmel_combined_coughs_11msHop_23msFFT_fmax11000_224logmel_EXTENDED.pickle",
-        "augmented_files": ["2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmelaugmented"
-                            ".pickle"]
+        # "augmented_files": ["2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmelaugmented"
+        #                     ".pickle"]
+        "augmented_files": [
+            "2023_08_12_logmel_combined_coughs__00_11msHop_23msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_coughs__01_11msHop_23msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_coughs__02_11msHop_23msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_coughs__03_11msHop_23msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_coughs__00_11msHop_23msFFT_fmax11000_1xNeg_0xPos_augmented.pickle"
+        ]
     },
 
     "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel": {
@@ -62,8 +97,16 @@ dataset_collection = {
     "logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_05_11_logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmelaugmented."
-                            "#pickle"]
+        # "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmelaugmented."
+        #                     "#pickle"]
+        "augmented_files": [
+            "2023_08_12_logmel_combined_breaths__00_46msHop_92msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_breaths__01_46msHop_92msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_breaths__02_46msHop_92msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_breaths__03_46msHop_92msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_12_logmel_combined_breaths__00_46msHop_92msFFT_fmax11000_1xNeg_0xPos_augmented.pickle"
+        ]
+
     },
     "logmel_combined_breaths_NEW_06msHop_46msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
@@ -208,6 +251,8 @@ dataset_collection = {
 device = "cuda" if cuda.is_available() else "cpu"
 TESTING_MODE = not cuda.is_available()
 
+full_metadata = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
+
 # if the script was called with one of those arguments, it will overwrite the settings (hyperparams, dataset etc.) with
 # values from the imported file
 if len(sys.argv) > 1:
@@ -237,6 +282,14 @@ else:
     print("No argument provided. Using Default Settings!")
     from run_settings.settings import *
 
+if isinstance(LOAD_FROM_DISC, str):
+    LOAD_FROM_DISC = os.path.join(*LOAD_FROM_DISC.split("\\"))
+if TRAIN_ON_FULL_SET:
+    RUN_COMMENT += "_trainOnFullSet"
+    EVALUATE_TEST_SET = False
+if LOAD_FROM_DISC is None and LOAD_FROM_DISC_multipleSplits is None and FREEZE_MODEL:
+    raise ValueError("If you do not load any model weights, you should not freeze the weights either!")
+
 if MODEL_NAME == "resnet18" and USE_MIL:
     MODEL_NAME = "Resnet18_MIL"
 if MODEL_NAME == "resnet50" and USE_MIL:
@@ -254,7 +307,8 @@ date = datetime.today().strftime("%Y-%m-%d")
 RUN_NAME = f"{date}_{MODEL_NAME}_{DATASET_NAME}_{RUN_COMMENT}"
 VERBOSE = True
 
-if device == "cpu":
+operating_system = platform.system()
+if device == "cpu" and operating_system.lower() == "windows":
     window = tk.Tk()
     TRACK_METRICS = askyesno(title='Tracking Settings',
                              message=f'Do you want to track this run?\nIt will be saved as: {RUN_NAME}')
@@ -367,7 +421,7 @@ def get_parameter_combinations(param_dict, verbose=True):
     return runs
 
 
-def train_on_batch(model, current_batch, current_loss_func, current_optimizer, my_tracker):
+def train_on_batch(model, current_batch, current_loss_func, current_optimizer, my_tracker, params):
     current_batch, sample_ids, metadata = current_batch[:2], current_batch[2], current_batch[3]
 
     model.train()
@@ -382,6 +436,13 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
         prediction = torch.unsqueeze(prediction, dim=0)
     loss, loss_per_sample = current_loss_func(prediction, label)
 
+    test_types = [full_metadata[full_metadata.user_id == user_id].type_of_covid_test.values[0]
+                  for user_id in sample_ids]
+    test_type_loss_coefs = torch.Tensor([params.self_assessment_penalty if test == "rtpcr" or test == "rat" else 1
+                                         for test in test_types]).to(device)
+
+    loss_per_sample = loss_per_sample * test_type_loss_coefs
+    loss = torch.nanmean(loss_per_sample)
     if loss == torch.nan or loss > 10:
         print(loss)
     for p in model.parameters():
@@ -397,7 +458,7 @@ def train_on_batch(model, current_batch, current_loss_func, current_optimizer, m
     current_optimizer.step()
 
 
-def evaluate_batch(model, current_batch, loss_function, my_tracker, set_type):
+def evaluate_batch(model, current_batch, loss_function, my_tracker, set_type, params):
     current_batch, sample_ids, metadata = current_batch[:2], current_batch[2], current_batch[3]
 
     model.eval()
@@ -410,6 +471,14 @@ def evaluate_batch(model, current_batch, loss_function, my_tracker, set_type):
     if prediction.dim() == 0:
         prediction = torch.unsqueeze(prediction, dim=0)
     loss, loss_per_sample = loss_function(prediction, label)
+
+    test_types = [full_metadata[full_metadata.user_id == user_id].type_of_covid_test.values[0]
+                  for user_id in sample_ids]
+    test_type_loss_coefs = torch.Tensor([params.self_assessment_penalty if test == "rtpcr" or test == "rat" else 1
+                                         for test in test_types]).to(device)
+    loss_per_sample = loss_per_sample * test_type_loss_coefs
+    loss = torch.nanmean(loss_per_sample)
+
     new_df = id_performance.make_df(sample_ids=sample_ids, labels=label, loss=loss_per_sample, prediction=prediction,
                                     set_type=set_type, rec_type=val_set.types_of_recording, seed=random_seed)
     id_performance.merge_dataframe(new_df, my_tracker)
@@ -502,6 +571,14 @@ def get_datasets(dataset_name, split_ratio=0.8, transform=None, train_augmentati
         augmented_datasets = None
     else:
         augmented_datasets = dataset_dict["augmented_files"]
+        temp_datasets = []
+        temp_datasets += augmented_datasets[:p.time_domain_augmentations_pos]
+        if p.time_domain_augmentations_neg > 0:
+            temp_datasets += augmented_datasets[-p.time_domain_augmentations_neg:]
+        if len(temp_datasets) == 0:
+            augmented_datasets = None
+        else:
+            augmented_datasets = temp_datasets
 
     training_set = DatasetClass(user_ids=train_ids, original_files=dataset_dict["participants_file"],
                                 transform=transform, augmented_files=augmented_datasets,
@@ -693,6 +770,7 @@ if __name__ == "__main__":
             train_loader, eval_loader, test_loader = get_data_loaders(train_set, val_set, test_set, p)
             my_cnn = get_model(MODEL_NAME, p, load_from_disc=LOAD_FROM_DISC, verbose=False)
             optimizer = get_optimizer(MODEL_NAME, load_from_disc=LOAD_FROM_DISC)
+
             lr_scheduler = ExponentialLR(optimizer, gamma=p.lr_decay)
             # lr_scheduler = ReduceLROnPlateau(optimizer, patience=10, verbose=False,
             #                                  factor=0.2, mode='min', threshold=0.001)
@@ -715,14 +793,15 @@ if __name__ == "__main__":
             for epoch in range(n_epochs):
 
                 tracker.reset(p, mode="train")
-                for i, batch in enumerate(train_loader):
-                    train_on_batch(my_cnn, batch, loss_func, optimizer, tracker)
-                epoch_loss_train, _ = write_metrics(mode="train")
+                if not FREEZE_MODEL:
+                    for i, batch in enumerate(train_loader):
+                        train_on_batch(my_cnn, batch, loss_func, optimizer, tracker, params=p)
+                    epoch_loss_train, _ = write_metrics(mode="train")
                 with torch.no_grad():
                     tracker.reset(p, mode="eval")
                     for _ in range(VAL_SET_OVERSAMPLING_FACTOR):
                         for i, batch in enumerate(eval_loader):
-                            evaluate_batch(my_cnn, batch, loss_func, tracker, set_type="eval")
+                            evaluate_batch(my_cnn, batch, loss_func, tracker, set_type="eval", params=p)
                     epoch_loss_val, eval_metric = write_metrics(mode="eval")
 
                 if SAVE_TO_DISC:
@@ -740,7 +819,7 @@ if __name__ == "__main__":
                         tracker.reset(p, mode="test")
                         for _ in range(VAL_SET_OVERSAMPLING_FACTOR):
                             for i, batch in enumerate(test_loader):
-                                evaluate_batch(my_cnn, batch, loss_func, tracker, set_type="test")
+                                evaluate_batch(my_cnn, batch, loss_func, tracker, set_type="test", params=p)
                         write_metrics(mode="test")
 
                 if isinstance(lr_scheduler, ReduceLROnPlateau):

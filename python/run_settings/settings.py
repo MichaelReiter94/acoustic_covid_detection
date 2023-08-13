@@ -1,4 +1,5 @@
 import os
+
 # MIL settings
 # parameters = dict(
 #     batch=[10],
@@ -30,22 +31,22 @@ import os
 # evaluation settings for saved models
 parameters = dict(
     batch=[64],
-    lr=[5e-4],
-    lr_decay=[0.95],
-    lr_in=[0.66],
-    wd=[1e-4],
+    lr=[3e-4],
+    lr_decay=[0.97],
+    lr_in=[None],
+    wd=[1e-5],
 
-    normalize=[True, False],
-    time_steps=[224],
-    use_augm_datasets=[False],
+    normalize=[True],
+    time_steps=[336],
+    use_augm_datasets=[True],
 
     shift=[True],
-    sigma=[0.0],
-    mixup_a=[0.2],
-    mixup_p=[0.8],
-    dropout_p=[0.2],
-    transfer_func_sim=[0.1],
-    random_gain=[0.1],
+    sigma=[0],
+    mixup_a=[0],
+    mixup_p=[0],
+    dropout_p=[0],
+    transfer_func_sim=[0],
+    random_gain=[0],
 
     exclude_outliers=[0],
     use_resnorm=[False],
@@ -55,21 +56,25 @@ parameters = dict(
     lr_mil=[None],
     n_MIL_Neurons=[None],
 
-    exclude_conf_miscl=[True],  # exclude confidently misclassified examples (manually identified and saved in excel
+    exclude_conf_miscl=[False],  # exclude confidently misclassified examples (manually identified and saved in excel
+    self_assessment_penalty=[1],
 
-    val_oversampl=[4],
+    val_oversampl=[6],
     class_weight=[1],
     weighted_sampler=[True],
+    time_domain_augmentations_pos=[4],
+    time_domain_augmentations_neg=[1],
+    exclude_exposed=[True]  # no effect, just a reminder to include into the excel sheet
 )
 
 # DATASET_NAME = "2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmel"
-# DATASET_NAME = "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel"
+DATASET_NAME = "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel"
 # DATASET_NAME = "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel"
 # DATASET_NAME = "logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel"
-DATASET_NAME = "logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel"
+# DATASET_NAME = "logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel"
 
 RUN_COMMENT = f"test"
-n_epochs = 100
+n_epochs = 20
 n_cross_validation_runs = 1
 USE_MIL = False
 MODEL_NAME = "resnet18"
@@ -77,7 +82,7 @@ MODEL_NAME = "resnet18"
 
 USE_TRAIN_VAL_TEST_SPLIT = True
 QUICK_TRAIN_FOR_TESTS = False
-SAMPLES_PER_EPOCH = 1024
+SAMPLES_PER_EPOCH = 64
 
 LOAD_FROM_DISC = False
 # LOAD_FROM_DISC = r"data/Coswara_processed/models/2023-07-02_epoch104_evalMetric_77.9_seed99468865.pth"
@@ -119,14 +124,6 @@ LOAD_FROM_DISC_multipleSplits = None
 SAVE_TO_DISC = False
 EVALUATE_TEST_SET = False
 TRAIN_ON_FULL_SET = False
-
-# ID_PERFORMANCE_TRACKING = "garbage.pickle"
-ID_PERFORMANCE_TRACKING = None
-
-# ###########################################   DO NOT CHANGE LINES BELOW   ############################################
-if isinstance(LOAD_FROM_DISC, str):
-    LOAD_FROM_DISC = os.path.join(*LOAD_FROM_DISC.split("\\"))
-if TRAIN_ON_FULL_SET:
-    RUN_COMMENT += "_trainOnFullSet"
-    EVALUATE_TEST_SET = False
-# ID_PERFORMANCE_TRACKING = "data/Coswara_processed/id_performance_tracking/" + ID_PERFORMANCE_TRACKING
+FREEZE_MODEL = False
+ID_PERFORMANCE_TRACKING = "garbage.pickle"
+# ID_PERFORMANCE_TRACKING = None

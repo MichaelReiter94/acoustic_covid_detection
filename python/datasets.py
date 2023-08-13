@@ -44,7 +44,8 @@ class CustomDataset(Dataset):
                     self.participants += feature_set.participants
 
         self.participants = [part for part in self.participants if part.id in user_ids]
-
+        # if exclude_confidently_misclassified:
+        self.drop_exposed_participants()
         self.drop_invalid_labels()
         self.drop_bad_audio()
         if self.mode == "train" and exclude_confidently_misclassified:
@@ -52,8 +53,8 @@ class CustomDataset(Dataset):
         self.drop_below_age(age_thresh=15)
 
         self.labels = np.array([int(participant.get_label()) for participant in self.participants])
-        self.mu, self.sigma = self.get_feature_statistics()
 
+        self.mu, self.sigma = self.get_feature_statistics()
         if normalize:
             for part in self.participants:
                 feats = part.recordings[self.types_of_recording].features
@@ -89,6 +90,12 @@ class CustomDataset(Dataset):
         output_matrices = np.array([np.roll(input_matrix, shift=shift, axis=-1) for shift in shifts])
         output_matrices = output_matrices[:, :, :n_output_timesteps]
         return output_matrices
+
+    def drop_exposed_participants(self):
+        # because the DICOVA challenge excluded participants that were only exposed, but not tested positive
+        # I include this option to also exclude this category of people
+        self.participants = [part for part in self.participants
+                             if part.meta_data["covid_health_status"] != "no_resp_illness_exposed"]
 
     def drop_invalid_labels(self):
         # dicova_labels = pd.read_csv("data/Coswara_processed/dicova_test_set_id_matches.csv")
@@ -208,10 +215,14 @@ class CustomDataset(Dataset):
         # sigma = np.load("data/Coswara_processed/pickles/stds_cough_heavy_15MFCCs.npy")
         # sigma = np.expand_dims(sigma, axis=1).astype("float32")
         rec_type = list(self.participants[0].recordings.keys())[0]
-        path = f"data/Coswara_processed/feature_statistics/{rec_type}_stats.npy"
+        # path = f"data/Coswara_processed/feature_statistics/{rec_type}_stats.npy"
+        path = f"data/Coswara_processed/feature_statistics/{rec_type}_general_stats.npy"
         loaded_stats = np.load(path)
-        mu, sigma = loaded_stats[0, :], loaded_stats[1, :]
-        mu, sigma = np.expand_dims(mu, axis=1), np.expand_dims(sigma, axis=1)
+        if loaded_stats.ndim > 1:
+            mu, sigma = loaded_stats[0, :], loaded_stats[1, :]
+            mu, sigma = np.expand_dims(mu, axis=1), np.expand_dims(sigma, axis=1)
+        else:
+            mu, sigma = loaded_stats[0], loaded_stats[1]
         return mu, sigma
 
     def mix_up(self, orig_sample, orig_label):

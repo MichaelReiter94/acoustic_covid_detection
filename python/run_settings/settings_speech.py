@@ -29,21 +29,21 @@ import os
 
 parameters = dict(
     batch=[64],
-    lr=[1e-3, 3e-4, 1e-4, 3e-5, 1e-5],
+    lr=[3e-4, 1e-4, 8e-5],
     lr_decay=[0.97],
     lr_in=[None],
     wd=[1e-4],
 
-    normalize=[True, False],
+    normalize=[True],
     time_steps=[336],
     use_augm_datasets=[False],
 
-    shift=[False],
-    sigma=[0],
-    mixup_a=[0],
-    mixup_p=[0],
+    shift=[True],
+    sigma=[0.002],
+    mixup_a=[0.05, 0.2, 0.4],
+    mixup_p=[0, 1],
     dropout_p=[0],
-    transfer_func_sim=[0],
+    transfer_func_sim=[3],
     random_gain=[0],
 
     exclude_outliers=[0],
@@ -55,17 +55,22 @@ parameters = dict(
     n_MIL_Neurons=[None],
 
     exclude_conf_miscl=[False],
+    self_assessment_penalty=[0.4],
 
     val_oversampl=[8],
     class_weight=[1],
     weighted_sampler=[True],
+
+    time_domain_augmentations_pos=[0],
+    time_domain_augmentations_neg=[0],
+    exclude_exposed=[True]  # no effect, just a reminder to include into the excel sheet
 )
 
 USE_MIL = False
 
-RUN_COMMENT = f"baseline_pretrained_normalizedInput"
-n_epochs = 75
-n_cross_validation_runs = 5
+RUN_COMMENT = f"mixup"
+n_epochs = 130
+n_cross_validation_runs = 3
 
 SAVE_TO_DISC = False
 EVALUATE_TEST_SET = False
@@ -80,6 +85,7 @@ LOAD_FROM_DISC_multipleSplits = None
 #     r"data/Coswara_processed/models/2023-07-11_epoch136_evalMetric_83.8_combined_speech _seed3213213211.pth",
 #     r"data/Coswara_processed/models/2023-07-11_epoch113_evalMetric_85.0_combined_speech _seed55555555.pth",
 #     r"data/Coswara_processed/models/2023-07-11_epoch21_evalMetric_85.4_combined_speech _seed66445511337.pth"]
+FREEZE_MODEL = False
 # ###########################################   DO NOT CHANGE LINES BELOW   ############################################
 DATASET_NAME = "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel"
 MODEL_NAME = "resnet18"
@@ -88,8 +94,3 @@ SAMPLES_PER_EPOCH = 1024
 TRAIN_ON_FULL_SET = False
 USE_TRAIN_VAL_TEST_SPLIT = True
 
-if isinstance(LOAD_FROM_DISC, str):
-    LOAD_FROM_DISC = os.path.join(*LOAD_FROM_DISC.split("\\"))
-if TRAIN_ON_FULL_SET:
-    RUN_COMMENT += "_trainOnFullSet"
-    EVALUATE_TEST_SET = False

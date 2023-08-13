@@ -748,8 +748,10 @@ class IntraEpochMetricsTracker:
 
             hovertext = hovertext.replace(", ", "<br>")
             temp = df[df["combined_params"] == str(run.parameters)]
-            fig.add_trace(go.Box(y=temp[metric], boxmean=True, x=[metric] * len(temp), name=name,
-                                 jitter=0.3, pointpos=-0, boxpoints='all',
+            fig.add_trace(go.Box(y=temp[metric], boxmean=True,
+                                 x=[metric] * len(temp),
+                                 name=name, jitter=0.3,
+                                 pointpos=-0, boxpoints='all',
                                  legendgroup=name,
                                  showlegend=showlegend,
                                  marker_color=f"rgba{black}",
@@ -853,9 +855,11 @@ class IntraEpochMetricsTracker:
         # varied_hyperparameters = self.get_columns_with_multiple_unique_values()
         df = pd.DataFrame()
         for run in self.crossval_runs:
-            row = dict(run.best_performances["eval"])
+            # row = dict(run.best_performances["eval"])
+            row = dict(run.best_performance_mean["eval"])
             row.update({"combined_params": str(run.parameters)})
-            df = pd.concat([df, pd.DataFrame(row)], ignore_index=True)
+            df = pd.concat([df, pd.DataFrame.from_records([row])])
+            # df = pd.concat([df, pd.DataFrame(row)], ignore_index=True)
 
         black = (0, 0, 0, 1)
         fig = go.Figure()
@@ -894,7 +898,7 @@ class IntraEpochMetricsTracker:
                                  legendgroup=group_offset_name,
                                  text=group_name,
                                  hoverinfo="y+text",
-                                 # jitter=0.01,
+                                 jitter=0.01,
                                  pointpos=0.0,
                                  boxpoints='all',
                                  marker_color=f"rgba{black}",
@@ -1109,7 +1113,8 @@ class IDPerformanceTracker:
                 row.at["loss"] = np.array([row.at["loss"]]).squeeze()
                 row.at["prediction"] = np.array([row.at["prediction"]]).squeeze()
                 # self.df = pd.concat([self.df, row], ignore_index=True, axis=0)
-                self.df = self.df.append(row, ignore_index=True)
+                self.df = pd.concat([self.df, row.to_frame().T], ignore_index=True)
+                # self.df = self.df.append(row, ignore_index=True)
             else:
                 raise ValueError("there cannot be more than one entry with the same ID and rec type")
         # return self.df
@@ -1149,3 +1154,11 @@ if __name__ == "__main__":
     from Jupyter_Notebooks.jupyter_utils import load_tracker
 
     tracker = load_tracker()
+    tracker.compute_overall_metrics(smooth_n_samples=10, ignore_first_n_epochs=10,
+                                    metric_used_for_performance_analysis="auc_roc")
+    fig = tracker.boxplot_groupedby_combination(metric="auc_roc", separate_param="shift")
+
+    tracker.boxplot_run_statistics("auc_roc")
+
+    print("show")
+
