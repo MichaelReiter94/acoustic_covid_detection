@@ -1,37 +1,8 @@
-import os
-# MIL settings
-# parameters = dict(
-#     batch=[20],
-#     lr=[5e-5],
-#     wd=[1e-4],
-#     lr_decay=[0.75],
-#     mixup_a=[0],
-#     mixup_p=[0],
-#     use_augm_datasets=[False],
-#     shift=[False],
-#     sigma=[0],
-#     weighted_sampler=[False],
-#     class_weight=[1],
-#     bag_size=[12],
-#     n_MIL_Neurons=[64],
-#     time_steps=[336],
-#     lr_in=[None],
-#     lr_mil=[1],
-#     dropout_p=[0.15],
-#     focal_loss=[0],
-#     exclude_outliers=[0],
-#     use_resnorm=[False],
-#     val_oversampl=[8],
-#     exclude_conf_miscl=[True],
-#     transfer_func_sim=[0],
-#     random_gain=[0]
-# )
-
 parameters = dict(
-    batch=[64],
-    lr=[3e-4, 5e-4],
+    batch=[32],
+    lr=[3e-4],
     lr_decay=[0.97],
-    lr_in=[None],
+    lr_in=[1],
     wd=[1e-4],
 
     normalize=[True],
@@ -40,37 +11,41 @@ parameters = dict(
 
     shift=[True],
     sigma=[0.01],
-    mixup_a=[0],
-    mixup_p=[0],
+    mixup_a=[0.4],
+    mixup_p=[1],
     dropout_p=[0],
     transfer_func_sim=[6],
     random_gain=[0],
 
     exclude_outliers=[0],
-    use_resnorm=[False],
-    focal_loss=[0],
+    focal_loss=[0.5],
 
     bag_size=[None],
     lr_mil=[None],
     n_MIL_Neurons=[None],
 
-    exclude_conf_miscl=[False],
+    exclude_conf_miscl=[True],
     self_assessment_penalty=[1],
 
     val_oversampl=[8],
     class_weight=[1],
     weighted_sampler=[True],
 
-    time_domain_augmentations_pos=[0, 2, 4],
-    time_domain_augmentations_neg=[0, 1],
-    exclude_exposed=[True]  # no effect, just a reminder to include into the excel sheet
+    time_domain_augmentations_pos=[0],
+    time_domain_augmentations_neg=[1],
+    exclude_exposed=[True],  # no effect, just a reminder to include into the Excel sheet
+
+    use_resnorm=[True, False],
+    resnorm_affine=[True, False],
+    resnorm_gamma=[0.25, 0.75],
+    input_resnorm=[True, False]
 )
 
 USE_MIL = False
 
-RUN_COMMENT = f"time_domain_augments"
-n_epochs = 130
-n_cross_validation_runs = 3
+RUN_COMMENT = f"resnorm"
+n_epochs = 150
+n_cross_validation_runs = 2
 
 SAVE_TO_DISC = False
 EVALUATE_TEST_SET = False
@@ -79,12 +54,6 @@ ID_PERFORMANCE_TRACKING = None
 LOAD_FROM_DISC = False
 # LOAD_FROM_DISC = r"data/Coswara_processed/models/2023-07-06_epoch169_evalMetric_83.8_seed99468865_cough.pth"
 LOAD_FROM_DISC_multipleSplits = None
-# LOAD_FROM_DISC_multipleSplits = [
-#     r"data/Coswara_processed/models/2023-07-11_epoch78_evalMetric_82.4_combined_coughs _seed99468865.pth",
-#     r"data/Coswara_processed/models/2023-07-11_epoch11_evalMetric_82.6_combined_coughs _seed215674.pth",
-#     r"data/Coswara_processed/models/2023-07-11_epoch76_evalMetric_83.8_combined_coughs _seed3213213211.pth",
-#     r"data/Coswara_processed/models/2023-07-11_epoch52_evalMetric_84.8_combined_coughs _seed55555555.pth",
-#     r"data/Coswara_processed/models/2023-07-11_epoch48_evalMetric_84.7_combined_coughs _seed66445511337.pth"]
 FREEZE_MODEL = False
 # ###########################################   DO NOT CHANGE LINES BELOW   ############################################
 DATASET_NAME = "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel"

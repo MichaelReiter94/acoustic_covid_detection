@@ -47,7 +47,7 @@ class CustomDataset(Dataset):
         # if exclude_confidently_misclassified:
         self.drop_exposed_participants()
         self.drop_invalid_labels()
-        self.drop_bad_audio()
+        # self.drop_bad_audio()
         if self.mode == "train" and exclude_confidently_misclassified:
             self.drop_confidently_misclassified_samples(threshold=2)
         self.drop_below_age(age_thresh=15)

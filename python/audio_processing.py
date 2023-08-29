@@ -62,6 +62,8 @@ from utils.utils import audiomentations_repr
 #     with open(f"data/Coswara_processed/pickles/{save_to}.pickle", "wb") as f:
 #         pickle.dump(participants, f)
 
+test_ids = list(pd.read_csv("data/Coswara_processed/test_set_df_dicova.csv").user_id)
+
 
 def contains_only_good_audio(participant_metadata, types_of_recording, ID):
     only_good_audio = True
@@ -78,6 +80,9 @@ def contains_only_good_audio(participant_metadata, types_of_recording, ID):
     manually_identified_bad_ids = list(pd.read_excel
                                        (r"data/Coswara_processed/bad ids from listening and analysis.xlsx",
                                         sheet_name=types_of_recording, usecols=["ID"]).ID)
+    if ID in test_ids:
+        return True
+
     if ID in manually_identified_bad_ids:
         return False
 
@@ -124,6 +129,7 @@ def pretty_print_dict(dictionary):
 
 class FeatureSet:
     def __init__(self, type_of_recording, audio_params):
+
         audio_params["hop_size_ms"] =  round(audio_params["hop_size"]/audio_params["sample_rate"]*1000, 2)
         audio_params["window_length_ms"] =  round(audio_params["window_length"]/audio_params["sample_rate"]*1000, 2)
         audio_params["duration_seconds"] =  round(audio_params["hop_size_ms"]*audio_params["n_time_steps"]/1000, 2)
@@ -183,6 +189,10 @@ class FeatureSet:
                                                 "error_meaning": "All values in audio file are 0",
                                                 "id_list": error_ids_all_zeros}
 
+                except UnboundLocalError:
+                    pass
+
+
         if UPDATE_INVALID_RECORDINGS:
             with open("data/Coswara_processed/pickles/invalid_recordings.pickle", "wb") as f:
                 pickle.dump(errors, f)
@@ -238,21 +248,22 @@ audio_parameters = dict(
     n_features=224,  # 15 | 224
     sample_rate=22050,
     n_fft=512 * 16,
-    window_length=2048,
+    window_length=1024,
     hop_size=512,
     fmin=0,
     fmax=22050 // 2
 )
 
 if __name__ == "__main__":
-    n_pos = 1  # create 'n_pos' augmented samples for each positively labelled participant in each dataset
+    n_pos = 0  # create 'n_pos' augmented samples for each positively labelled participant in each dataset
     n_neg = 0  # create 'n_neg' augmented samples for each negatively labelled participant in each dataset
-    rec_type = "combined_vowels"  # combined_coughs, combined_breaths, combined_vowels, combined_speech
-    n_augmented_datasets = 4
+    rec_type = "combined_breaths"  # combined_coughs, combined_breaths, combined_vowels, combined_speech
+    n_augmented_datasets = 1
 
     for i in range(n_augmented_datasets):
-        save_string = f"_0{i}_23msHop_96msFFT_fmax11000_{n_neg}xNeg_{n_pos}xPos_"
+        # save_string = f"_0{i}_23msHop_46msFFT_fmax11000_{n_neg}xNeg_{n_pos}xPos_"
+        save_string = f"23msHop_46msFFT_fullDicovaTestSet"
         feature_set = FeatureSet(rec_type, audio_parameters)
-        feature_set.create_participant_objects(augmentations=time_domain_augmentations,
+        feature_set.create_participant_objects(augmentations=None,
                                                augmentations_per_label=(n_neg, n_pos))
         feature_set.save_to(save_string)

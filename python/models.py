@@ -330,7 +330,7 @@ class BrogrammersSequentialModel(nn.Module):
         return prediction
 
 
-def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1,
+def get_resnet18(dropout_p=0.0, resnorm_settings=None, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1,
                  load_from_disc=False):
     # torch.manual_seed(333666999)
     # my_model = resnet18(weights=None)
@@ -356,8 +356,15 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
         my_model.conv1.weight = nn.Parameter(weights_single_color)
 
     ############################  add residual normalization layers to resnet  ################################
-    gamma = 0.5
-    if add_residual_layers:
+    if resnorm_settings["use_input_resnorm"]:
+        my_model.conv1 = nn.Sequential(
+            ResidualInstanceNorm2d(num_features=FREQUNCY_BINS, gamma=resnorm_settings["gamma"],
+                                   affine=resnorm_settings["use_affine"], track_running_stats=False,
+                                   gamma_is_learnable=False),
+            my_model.conv1
+        )
+
+    if resnorm_settings["use_resnorm"]:
         layers = summary(my_model, input_size=(1, N_CHANNELS, FREQUNCY_BINS, TIMESTEPS))
         layers = str(layers).split("\n")
         layers = [layer for layer in layers if "BatchNorm2d: 3" in layer]
@@ -372,12 +379,13 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
             for i in range(len(layer)):
                 layer[i].bn1 = nn.Sequential(
                     layer[i].bn1,
-                    # ResidualInstanceNorm2d(num_features=layer[i].conv1.out_channels, gamma=gamma,
-                    #                        gamma_is_learnable=True)
-                    ResidualInstanceNorm2d(num_features=fdims[counter], gamma=gamma,
-                                           affine=True, track_running_stats=False, gamma_is_learnable=True)
-                    # ResidualBatchNorm2d(num_features=fdims[counter], gamma=gamma,
-                    #                     affine=True, track_running_stats=True, gamma_is_learnable=True)
+                    # ResidualInstanceNorm2d(num_features=layer[i].conv1.out_channels, gamma=resnorm_settings["gamma"],
+                    #                        gamma_is_learnable=False)
+                    ResidualInstanceNorm2d(num_features=fdims[counter], gamma=resnorm_settings["gamma"],
+                                           affine=resnorm_settings["use_affine"], track_running_stats=False,
+                                           gamma_is_learnable=False)
+                    # ResidualBatchNorm2d(num_features=fdims[counter], gamma=resnorm_settings["gamma"],
+                    #                     affine=affine=resnorm_settings["use_affine"], track_running_stats=True, gamma_is_learnable=False)
                 )
                 counter += 1
                 # layer[i].bn2 = nn.Sequential(
@@ -427,7 +435,7 @@ def get_resnet18(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
     return my_model
 
 
-def get_resnet50(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1,
+def get_resnet50(dropout_p=0.0, resnorm_settings=None, FREQUNCY_BINS=224, TIMESTEPS=224, N_CHANNELS=1,
                  load_from_disc=False):
     my_model = resnet50(weights=ResNet50_Weights.DEFAULT)
     my_model.input_size = (N_CHANNELS, FREQUNCY_BINS, TIMESTEPS)
@@ -450,8 +458,16 @@ def get_resnet50(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
         my_model.conv1.weight = nn.Parameter(weights_single_color)
 
     ############################  add residual normalization layers to resnet  ################################
-    gamma = 0.5
-    if add_residual_layers:
+    if resnorm_settings["use_input_resnorm"]:
+        my_model.conv1 = nn.Sequential(
+            ResidualInstanceNorm2d(num_features=FREQUNCY_BINS, gamma=resnorm_settings["gamma"],
+                                   affine=resnorm_settings["use_affine"], track_running_stats=False,
+                                   gamma_is_learnable=False),
+            my_model.conv1
+        )
+
+
+    if resnorm_settings["use_resnorm"]:
         layers = summary(my_model, input_size=(1, N_CHANNELS, FREQUNCY_BINS, TIMESTEPS))
         layers = str(layers).split("\n")
         layers = [layer for layer in layers if "BatchNorm2d: 3" in layer]
@@ -468,8 +484,9 @@ def get_resnet50(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
                     layer[i].bn1,
                     # ResidualInstanceNorm2d(num_features=layer[i].conv1.out_channels, gamma=gamma,
                     #                        gamma_is_learnable=True)
-                    ResidualInstanceNorm2d(num_features=fdims[counter], gamma=gamma,
-                                           affine=True, track_running_stats=False, gamma_is_learnable=True)
+                    ResidualInstanceNorm2d(num_features=fdims[counter], gamma=resnorm_settings["gamma"],
+                                           affine=resnorm_settings["use_affine"], track_running_stats=False,
+                                           gamma_is_learnable=False)
                     # ResidualBatchNorm2d(num_features=fdims[counter], gamma=gamma,
                     #                     affine=True, track_running_stats=True, gamma_is_learnable=True)
                 )
@@ -478,8 +495,9 @@ def get_resnet50(dropout_p=0.0, add_residual_layers=False, FREQUNCY_BINS=224, TI
                 #     layer[i].bn2,
                 #     # ResidualInstanceNorm2d(num_features=layer[i].conv2.out_channels, gamma=gamma,
                 #     #                        gamma_is_learnable=True)
-                #     ResidualInstanceNorm2d(num_features=fdims[counter], gamma=gamma,
-                #                            affine=True, track_running_stats=False, gamma_is_learnable=True)
+                #     ResidualInstanceNorm2d(num_features=fdims[counter], gamma=resnorm_settings["gamma"],
+                #                                            affine=resnorm_settings["use_affine"],
+                #                                            track_running_stats=False, gamma_is_learnable=False)
                 # )
                 counter += 1
                 counter += 1
@@ -619,10 +637,10 @@ class BrogrammersMIL(nn.Module):
 
 
 class Resnet18MILOld(nn.Module):
-    def __init__(self, n_hidden_attention=32, add_dropouts=True, add_residual_layers=False, F=224, T=224, C=1):
+    def __init__(self, n_hidden_attention=32, add_dropouts=True, resnorm_settings=None, F=224, T=224, C=1):
         super().__init__()
         # self.resnet = resnet18(weights=ResNet18_Weights.DEFAULT)
-        self.resnet = get_resnet18(dropout_p=add_dropouts, add_residual_layers=add_residual_layers,
+        self.resnet = get_resnet18(dropout_p=add_dropouts, resnorm_settings=resnorm_settings,
                                    FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C)
         # TIMESTEPS = 224
         # FREQUNCY_BINS = 224
@@ -687,15 +705,15 @@ class Resnet18MILOld(nn.Module):
 
 
 class ResnetMIL(nn.Module):
-    def __init__(self, n_hidden_attention=32, dropout_p=0.0, add_residual_layers=False, F=224, T=224, C=1,
+    def __init__(self, n_hidden_attention=32, dropout_p=0.0, resnorm_settings=None, F=224, T=224, C=1,
                  load_from_disc=False, resnet_name=None):
         super().__init__()
         if resnet_name == "Resnet18_MIL":
-            self.resnet = get_resnet18(dropout_p=dropout_p, add_residual_layers=add_residual_layers,
+            self.resnet = get_resnet18(dropout_p=dropout_p, resnorm_settings=resnorm_settings,
                                        FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C, load_from_disc=load_from_disc)
             self.fc_layer_neurons = 512
         elif resnet_name == "Resnet50_MIL":
-            self.resnet = get_resnet50(dropout_p=dropout_p, add_residual_layers=add_residual_layers,
+            self.resnet = get_resnet50(dropout_p=dropout_p, resnorm_settings=resnorm_settings,
                                        FREQUNCY_BINS=F, TIMESTEPS=T, N_CHANNELS=C, load_from_disc=load_from_disc)
             self.fc_layer_neurons = 2048
         else:

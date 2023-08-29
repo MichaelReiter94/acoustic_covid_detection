@@ -180,14 +180,14 @@ class ResidualInstanceNorm2d(nn.InstanceNorm2d):
     def forward(self, x):
         # permute dimensions because we want to apply the normalization across the time and channel dimensions
         # x = x.permute(0, 2, 3, 1).contiguous()
-        x = x.permute(BATCH, FREQUENCY, TIME, CHANNEL).contiguous()
+        y = x.permute(BATCH, FREQUENCY, TIME, CHANNEL).contiguous()
 
         # apply instance normalization
-        x = super(ResidualInstanceNorm2d, self).forward(x)
+        y = super(ResidualInstanceNorm2d, self).forward(y)
         # permute dimensions back
-        x = x.permute(0, 3, 1, 2).contiguous()
-        x = x + self.gamma * x
-        return x
+        y = y.permute(0, 3, 1, 2).contiguous()
+        y = self.gamma*x + (1-self.gamma)*y
+        return y
 
 
 class ResidualBatchNorm2d(nn.InstanceNorm2d):
@@ -206,13 +206,13 @@ class ResidualBatchNorm2d(nn.InstanceNorm2d):
     def forward(self, x):
         # permute dimensions because we want to apply the normalization across the time and channel dimensions
 
-        x = x.permute(CHANNEL, FREQUENCY, TIME, BATCH).contiguous()
+        y = x.permute(CHANNEL, FREQUENCY, TIME, BATCH).contiguous()
         # apply instance normalization
-        x = super(ResidualBatchNorm2d, self).forward(x)
+        y = super(ResidualBatchNorm2d, self).forward(y)
         # permute dimensions back
-        x = x.permute(3, 0, 1, 2).contiguous()
-        x = x + self.gamma * x
-        return x
+        y = y.permute(3, 0, 1, 2).contiguous()
+        y = self.gamma*x + (1-self.gamma) * y
+        return y
 
 
 if __name__ == "__main__":

@@ -34,21 +34,12 @@ import platform
 mpl.rcParams["savefig.directory"] = "../documentation/imgs"
 # <editor-fold desc="#########################  SETTIGNS AND CONSTANTS and constants #################################">
 dataset_collection = {
-    # "logmel_combined_speech_NEW_23msHop_46msFFT_multiple_augmented_sets": {
-    #     "dataset_class": ResnetLogmelDataset,
-    #     "participants_file": "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
-    #     "augmented_files": [
-    #         "2023_07_17_logmel_combined_speech_01_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
-    #         "2023_07_17_logmel_combined_speech_02_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
-    #         "2023_07_17_logmel_combined_speech_03_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
-    #         "2023_07_17_logmel_combined_speech_04_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
-    #         "2023_07_17_logmel_combined_speech_10_23msHop_46msFFT_fmax11000_224logmel_1x0xaugmented.pickle",
-    #     ]
-    # },
-
     "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
+        # "participants_file": "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
+        "participants_file": "2023_08_26_logmel_combined_speech_23msHop_46msFFT_fullDicovaTestSet.pickle",
+
+
         # "augmented_files": ["2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
         #                     ".pickle"]
         "augmented_files": [
@@ -61,24 +52,22 @@ dataset_collection = {
     },
     "2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmel.pickle",
-        # "augmented_files": ["2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmelaugmented"
-        #                     ".pickle"]
+        # "participants_file": "2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmel.pickle",
+        "participants_file": "2023_08_27_logmel_combined_vowels_23msHop_92msFFT_fullDicovaTestSet.pickle",
         "augmented_files": [
             "2023_08_12_logmel_combined_vowels__00_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
-            "2023_08_12_logmel_combined_vowels__01_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
-            "2023_08_12_logmel_combined_vowels__02_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
-            "2023_08_12_logmel_combined_vowels__03_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
-            "2023_08_12_logmel_combined_vowels__00_23msHop_96msFFT_fmax11000_1xNeg_0xPos_augmented.pickle",
-            # TODO check if these are named correctly
+            "2023_08_13_logmel_combined_vowels__01_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_13_logmel_combined_vowels__02_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_14_logmel_combined_vowels__03_23msHop_96msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_14_logmel_combined_vowels__00_23msHop_96msFFT_fmax11000_1xNeg_0xPos_augmented.pickle",
         ]
+        # "augmented_files": ["2023_06_25_logmel_combined_vowels_NEW_23msHop_96msFFT_fmax11000_224logmelaugmented"
+        #                     ".pickle"]
     },
     "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel.pickle",
-        # "participants_file": "2023_07_08_logmel_combined_coughs_11msHop_23msFFT_fmax11000_224logmel_EXTENDED.pickle",
-        # "augmented_files": ["2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmelaugmented"
-        #                     ".pickle"]
+        # "participants_file": "2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmel.pickle",
+        "participants_file": "2023_08_26_logmel_combined_coughs_11msHop_23msFFT_fullDicovaTestSet.pickle",
         "augmented_files": [
             "2023_08_12_logmel_combined_coughs__00_11msHop_23msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
             "2023_08_12_logmel_combined_coughs__01_11msHop_23msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
@@ -86,19 +75,25 @@ dataset_collection = {
             "2023_08_12_logmel_combined_coughs__03_11msHop_23msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
             "2023_08_12_logmel_combined_coughs__00_11msHop_23msFFT_fmax11000_1xNeg_0xPos_augmented.pickle"
         ]
+        # "participants_file": "2023_07_08_logmel_combined_coughs_11msHop_23msFFT_fmax11000_224logmel_EXTENDED.pickle",
+        # "augmented_files": ["2023_05_22_logmel_combined_coughs_NEW_11msHop_23msFFT_fmax11000_224logmelaugmented"
+        #                     ".pickle"]
     },
-
     "logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
         "participants_file": "2023_05_11_logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmel.pickle",
         "augmented_files": ["2023_05_15_logmel_combined_breaths_NEW_92msHop_184msFFT_fmax11000_224logmelaugmented"
                             ".pickle"]
     },
+    "logmel_combined_breaths_ALTERNATIVE_RES_46msHop_92msFFT_fmax5500": {
+        "dataset_class": ResnetLogmelDataset,
+        "participants_file": "2023_08_12_logmel_combined_breaths_ALTERNATIVE_RES_46msHop_92msFFT_fmax5500.pickle",
+        "augmented_files": []
+    },
     "logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_05_11_logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel.pickle",
-        # "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmelaugmented."
-        #                     "#pickle"]
+        # "participants_file": "2023_05_11_logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmel.pickle",
+        "participants_file": "2023_08_27_logmel_combined_breaths_46msHop_92msFFT_fullDicovaTestSet.pickle",
         "augmented_files": [
             "2023_08_12_logmel_combined_breaths__00_46msHop_92msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
             "2023_08_12_logmel_combined_breaths__01_46msHop_92msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
@@ -106,129 +101,149 @@ dataset_collection = {
             "2023_08_12_logmel_combined_breaths__03_46msHop_92msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
             "2023_08_12_logmel_combined_breaths__00_46msHop_92msFFT_fmax11000_1xNeg_0xPos_augmented.pickle"
         ]
-
-    },
-    "logmel_combined_breaths_NEW_06msHop_46msFFT_fmax11000_224logmel": {
-        "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_05_04_logmel_combined_breaths_NEW_6msHop_46msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": []
-    },
-    "logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel": {
-        "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_05_04_logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmelaugmented."
-                            "pickle"]
-    },
-    "logmel_combined_breaths_NEW_11msHop_92msFFT_fmax11000_224logmel": {
-        "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_05_04_logmel_combined_breaths_NEW_11msHop_92msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": []
+        # "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_46msHop_92msFFT_fmax11000_224logmelaugmented."
+        #                     "#pickle"]
     },
     "logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel": {
         "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_05_02_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
-                            ".pickle"]
+        # "participants_file": "2023_05_02_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
+        "participants_file": "2023_08_27_logmel_combined_breaths_23msHop_46msFFT_fullDicovaTestSet.pickle",
+        "augmented_files": [
+            "2023_08_24_logmel_combined_breaths__00_23msHop_46msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_24_logmel_combined_breaths__01_23msHop_46msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_24_logmel_combined_breaths__02_23msHop_46msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_24_logmel_combined_breaths__03_23msHop_46msFFT_fmax11000_0xNeg_1xPos_augmented.pickle",
+            "2023_08_24_logmel_combined_breaths__00_23msHop_46msFFT_fmax11000_1xNeg_0xPos_augmented.pickle"
+        ]
+        # "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_23msHop_46msFFT_fmax11000_224logmelaugmented"
+        #                     ".pickle"]
     },
-    "logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel": {
-        "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_05_02_logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel.pickle",
-        "augmented_files": []
-    },
-    "logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel": {
-        "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_03_13_logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel.pickle",
-        "augmented_files": ["2023_03_14_logmel_combined_breaths_3s_FFT2048_fmax5500_112logmelaugmented.pickle"]
-    },
-
-    "combined_breaths_12s_FFT4096_fmax5500_50mfccs": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_03_12_mfcc_combined_breaths_12s_FFT4096_fmax5500_50mfccs.pickle",
-        "augmented_files": ["2023_03_13_mfcc_combined_breaths_12s_FFT4096_fmax5500_50mfccs_x1x5augmented.pickle"]
-    },
-    "mfcc_vowel_e_6s_FFT2048_fmax5500": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_03_11_mfcc_vowel-e_6s_FFT2048_fmax5500.pickle",
-        "augmented_files": [".pickle"]
-    },
-    "mfcc_vowels_combined_6s_FFT2048_fmax5500": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_03_11_mfcc_combined_vowels_6s_FFT2048_fmax5500.pickle",
-        "augmented_files": ["2023_03_11_mfcc_combined_vowels_6s_FFT2048_fmax5500_x1x7augmented.pickle"]
-    },
-    "mfcc_vowel_a_6s_FFT2048_fmax5500": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_03_10_mfcc_vowel-a_6s_FFT2048_fmax5500.pickle",
-        "augmented_files": [".pickle"]
-    },
-
-    "resnet_mil_combined_cough": {
-        "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_02_25_logmel_combined_coughs_3s.pickle",
-        # "augmented_files":  ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle"]
-        "augmented_files": ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle",
-                            "2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
-    },
-    "mfcc_mil_combined_cough": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_02_23_mfcc_combined_coughs_3s.pickle",
-        # "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
-        # "augmented_files": ["2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
-        "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle",
-                            "2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
-    },
-    "mfccs_3s_breathing_deep": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_02_21_mfcc_breathing-deep_3s_22kHz.pickle",
-        "augmented_files": ["2023_02_21_mfcc_breathing-deep_3s_22kHz_augmented.pickle"]
-    },
-    "logmel_3s_combined_coughs": {
-        "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_02_25_logmel_combined_coughs_3s.pickle",
-        "augmented_files": ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle",
-                            "2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
-        # "augmented_files": ["2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
-
-    },
-    "mfccs_3s_combined_coughs": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_02_23_mfcc_combined_coughs_3s.pickle",
-        "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle",
-                            "2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
-        # "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
-    },
-    "15_mfccs_highres_new": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_02_21_mfcc_cough-heavy_3s_22kHz.pickle",
-        "augmented_files": ["2023_02_21_mfcc_cough-heavy_3s_22kHz_augmented.pickle"],
-        # "augmented_files": None
-    },
-    "brogrammers_new": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2023_02_20_brogrammers_settings_new.pickle",
-        "augmented_files": ["2023_02_20_brogrammers_settings_new_augmented.pickle"],
-        # "augmented_files": None
-    },
-    "15_mfccs": {
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "participants_validLabelsOnly.pickle",
-        "augmented_files": ["participants_oversampledPositives.pickle"],
-        # "augmented_files": None
-    },
-    "15_mfccs_highRes": {
-        # higher time resolution and MFCCS calculated from higher frequency resolution
-        # "dataset_class": BrogrammersMfccHighRes,
-        "dataset_class": BrogrammersMFCCDataset,
-        "participants_file": "2022-12-13_MFCCs_original_highTimeRes.pickle",
-        "augmented_files": ["2022-12-13_MFCCs_augmented_highTimeRes.pickle"],
-        # "augmented_files": None
-    },
-    "logmel_1_channel": {
-        "dataset_class": ResnetLogmelDataset,
-        "participants_file": "2023_02_20_logmel_cough_22kHz_new.pickle",
-        "augmented_files": ["2023_02_21_logmel_cough_22kHz_new_augmented.pickle"]
-        # "augmented_files": None
-    },
+    # "logmel_combined_speech_NEW_23msHop_46msFFT_multiple_augmented_sets": {
+    #     "dataset_class": ResnetLogmelDataset,
+    #     "participants_file": "2023_06_25_logmel_combined_speech_NEW_23msHop_46msFFT_fmax11000_224logmel.pickle",
+    #     "augmented_files": [
+    #         "2023_07_17_logmel_combined_speech_01_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+    #         "2023_07_17_logmel_combined_speech_02_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+    #         "2023_07_17_logmel_combined_speech_03_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+    #         "2023_07_17_logmel_combined_speech_04_23msHop_46msFFT_fmax11000_224logmel_0x1xaugmented.pickle",
+    #         "2023_07_17_logmel_combined_speech_10_23msHop_46msFFT_fmax11000_224logmel_1x0xaugmented.pickle",
+    #     ]
+    # },
+    # "logmel_combined_breaths_NEW_06msHop_46msFFT_fmax11000_224logmel": {
+    #     "dataset_class": ResnetLogmelDataset,
+    #     "participants_file": "2023_05_04_logmel_combined_breaths_NEW_6msHop_46msFFT_fmax11000_224logmel.pickle",
+    #     "augmented_files": []
+    # },
+    # "logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel": {
+    #     "dataset_class": ResnetLogmelDataset,
+    #     "participants_file": "2023_05_04_logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmel.pickle",
+    #     "augmented_files": ["2023_05_21_logmel_combined_breaths_NEW_11msHop_46msFFT_fmax11000_224logmelaugmented."
+    #                         "pickle"]
+    # },
+    # "logmel_combined_breaths_NEW_11msHop_92msFFT_fmax11000_224logmel": {
+    #     "dataset_class": ResnetLogmelDataset,
+    #     "participants_file": "2023_05_04_logmel_combined_breaths_NEW_11msHop_92msFFT_fmax11000_224logmel.pickle",
+    #     "augmented_files": []
+    # },
+    # "logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel": {
+    #     "dataset_class": ResnetLogmelDataset,
+    #     "participants_file": "2023_05_02_logmel_combined_breaths_NEW_23msHop_92msFFT_fmax11000_224logmel.pickle",
+    #     "augmented_files": []
+    # },
+    # "logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel": {
+    #     "dataset_class": ResnetLogmelDataset,
+    #     "participants_file": "2023_03_13_logmel_combined_breaths_46msHop_92msFFT_fmax5500_112logmel.pickle",
+    #     "augmented_files": ["2023_03_14_logmel_combined_breaths_3s_FFT2048_fmax5500_112logmelaugmented.pickle"]
+    # },
+    #
+    # "combined_breaths_12s_FFT4096_fmax5500_50mfccs": {
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "2023_03_12_mfcc_combined_breaths_12s_FFT4096_fmax5500_50mfccs.pickle",
+    #     "augmented_files": ["2023_03_13_mfcc_combined_breaths_12s_FFT4096_fmax5500_50mfccs_x1x5augmented.pickle"]
+    # },
+    # "mfcc_vowel_e_6s_FFT2048_fmax5500": {
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "2023_03_11_mfcc_vowel-e_6s_FFT2048_fmax5500.pickle",
+    #     "augmented_files": [".pickle"]
+    # },
+    # "mfcc_vowels_combined_6s_FFT2048_fmax5500": {
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "2023_03_11_mfcc_combined_vowels_6s_FFT2048_fmax5500.pickle",
+    #     "augmented_files": ["2023_03_11_mfcc_combined_vowels_6s_FFT2048_fmax5500_x1x7augmented.pickle"]
+    # },
+    # "mfcc_vowel_a_6s_FFT2048_fmax5500": {
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "2023_03_10_mfcc_vowel-a_6s_FFT2048_fmax5500.pickle",
+    #     "augmented_files": [".pickle"]
+    # },
+    #
+    # "resnet_mil_combined_cough": {
+    #     "dataset_class": ResnetLogmelDataset,
+    #     "participants_file": "2023_02_25_logmel_combined_coughs_3s.pickle",
+    #     # "augmented_files":  ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle"]
+    #     "augmented_files": ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle",
+    #                         "2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
+    # },
+    # "mfcc_mil_combined_cough": {
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "2023_02_23_mfcc_combined_coughs_3s.pickle",
+    #     # "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
+    #     # "augmented_files": ["2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
+    #     "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle",
+    #                         "2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
+    # },
+    # "mfccs_3s_breathing_deep": {
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "2023_02_21_mfcc_breathing-deep_3s_22kHz.pickle",
+    #     "augmented_files": ["2023_02_21_mfcc_breathing-deep_3s_22kHz_augmented.pickle"]
+    # },
+    # "logmel_3s_combined_coughs": {
+    #     "dataset_class": ResnetLogmelDataset,
+    #     "participants_file": "2023_02_25_logmel_combined_coughs_3s.pickle",
+    #     "augmented_files": ["2023_02_26_logmel_combined_coughs_3s_7xaugmented.pickle",
+    #                         "2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
+    #     # "augmented_files": ["2023_02_27_logmel_combined_coughs_3s_augmented_x2x2augmented.pickle"]
+    #
+    # },
+    # "mfccs_3s_combined_coughs": {
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "2023_02_23_mfcc_combined_coughs_3s.pickle",
+    #     "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle",
+    #                         "2023_02_26_mfcc_combined_coughs_3s_x2x2augmented.pickle"]
+    #     # "augmented_files": ["2023_02_23_mfcc_combined_coughs_3s_7xaugmented.pickle"]
+    # },
+    # "15_mfccs_highres_new": {
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "2023_02_21_mfcc_cough-heavy_3s_22kHz.pickle",
+    #     "augmented_files": ["2023_02_21_mfcc_cough-heavy_3s_22kHz_augmented.pickle"],
+    #     # "augmented_files": None
+    # },
+    # "brogrammers_new": {
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "2023_02_20_brogrammers_settings_new.pickle",
+    #     "augmented_files": ["2023_02_20_brogrammers_settings_new_augmented.pickle"],
+    #     # "augmented_files": None
+    # },
+    # "15_mfccs": {
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "participants_validLabelsOnly.pickle",
+    #     "augmented_files": ["participants_oversampledPositives.pickle"],
+    #     # "augmented_files": None
+    # },
+    # "15_mfccs_highRes": {
+    #     # higher time resolution and MFCCS calculated from higher frequency resolution
+    #     # "dataset_class": BrogrammersMfccHighRes,
+    #     "dataset_class": BrogrammersMFCCDataset,
+    #     "participants_file": "2022-12-13_MFCCs_original_highTimeRes.pickle",
+    #     "augmented_files": ["2022-12-13_MFCCs_augmented_highTimeRes.pickle"],
+    #     # "augmented_files": None
+    # },
+    # "logmel_1_channel": {
+    #     "dataset_class": ResnetLogmelDataset,
+    #     "participants_file": "2023_02_20_logmel_cough_22kHz_new.pickle",
+    #     "augmented_files": ["2023_02_21_logmel_cough_22kHz_new_augmented.pickle"]
+    #     # "augmented_files": None
+    # },
     # "logmel_3_channels_512_2048_8192": {
     #     "dataset_class": ResnetLogmel3Channels,
     #     "participants_file": "2022-12-08_logmel_3_channel_noAug_noBadAudio.pickle",
@@ -257,17 +272,17 @@ full_metadata = pd.read_csv("data/Coswara_processed/full_meta_data.csv")
 # values from the imported file
 if len(sys.argv) > 1:
     argument = sys.argv[1]
-    if argument == "settings_11_46":
-        from run_settings.settings_11_46 import *
-    elif argument == "settings_11_46_mil":
-        from run_settings.settings_11_46_mil import *
-    elif argument == "settings_23_46":
-        from run_settings.settings_23_46 import *
-    elif argument == "settings_92_184":
-        from run_settings.settings_92_184 import *
+    # if argument == "settings_11_46":
+    #     from run_settings.settings_11_46 import *
+    # elif argument == "settings_11_46_mil":
+    #     from run_settings.settings_11_46_mil import *
+    # elif argument == "settings_23_46":
+    #     from run_settings.settings_23_46 import *
+    # elif argument == "settings_92_184":
+    #     from run_settings.settings_92_184 import *
     # elif argument == "settings_23_46_noOversampling":
     #     from run_settings.settings_23_46_noOversampling import *
-    elif argument == "settings_cough":
+    if argument == "settings_cough":
         from run_settings.settings_cough import *
     elif argument == "settings_speech":
         from run_settings.settings_speech import *
@@ -289,6 +304,11 @@ if TRAIN_ON_FULL_SET:
     EVALUATE_TEST_SET = False
 if LOAD_FROM_DISC is None and LOAD_FROM_DISC_multipleSplits is None and FREEZE_MODEL:
     raise ValueError("If you do not load any model weights, you should not freeze the weights either!")
+if LOAD_FROM_DISC_multipleSplits is not None:
+    LOAD_FROM_DISC_multipleSplits = [os.path.join("data", "Coswara_processed", "models", file)
+                                     for file in LOAD_FROM_DISC_multipleSplits]
+if LOAD_FROM_DISC:
+    LOAD_FROM_DISC = os.path.join("data", "Coswara_processed", "models", LOAD_FROM_DISC)
 
 if MODEL_NAME == "resnet18" and USE_MIL:
     MODEL_NAME = "Resnet18_MIL"
@@ -643,17 +663,26 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
         "Resnet50_MIL": ResnetMIL,
         # "PredictionLevelMIL_mfcc": PredLevelMIL
     }
+
+    resnorm_settings = {
+        "use_resnorm": p.use_resnorm,
+        "use_affine": p.resnorm_affine,
+        "gamma": p.resnorm_gamma,
+        "use_input_resnorm": p.input_resnorm
+    }
+
+
     if model_name in ["MIL_brogrammers", "PredictionLevelMIL_mfcc"]:
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons).to(device)
     elif model_name == "Resnet18_MIL" or model_name == "Resnet50_MIL":
         _, _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons, dropout_p=p.dropout_p,
-                                          F=F, T=T, add_residual_layers=p.use_resnorm,
+                                          F=F, T=T, resnorm_settings=resnorm_settings,
                                           load_from_disc=load_from_disc, resnet_name=model_name).to(device)
     elif model_name == "resnet18" or model_name == "resnet50":
         _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](dropout_p=p.dropout_p, FREQUNCY_BINS=F, TIMESTEPS=T,
-                                          add_residual_layers=p.use_resnorm, load_from_disc=load_from_disc).to(device)
+                                          resnorm_settings=resnorm_settings, load_from_disc=load_from_disc).to(device)
     else:
         my_model = model_dict[model_name]().to(device)
 
@@ -708,7 +737,7 @@ def write_metrics(mode):
     #     writer.add_scalar(f"07_TrueNegativeRate_or_Specificity/{mode}", metrics["tnr"], epoch)
     #     writer.add_scalar(f"08_Precision_or_PositivePredictiveValue/{mode}", metrics["precision"], epoch)
     #     writer.add_scalar(f"09_true_positives_at_95/{mode}", metrics["tpr_at_95"], epoch)
-    performance_eval_metric = (metrics["auc_roc"] + metrics["accuracy"]) / 2
+    performance_eval_metric = (metrics["auc_roc"] + metrics["auc_prec_recall"]) / 2
     return metrics["loss"], performance_eval_metric
 
 
@@ -743,7 +772,7 @@ if __name__ == "__main__":
             if LOAD_FROM_DISC_multipleSplits is not None:
                 LOAD_FROM_DISC = LOAD_FROM_DISC_multipleSplits[seed_idx]
 
-            # highest_score = 0
+            highest_score = 0
             # <editor-fold desc="#####################################  SETUP ########################################">
             summarize_cuda_memory_usage()
             threshold = None if LOAD_FROM_DISC else 0.75
@@ -837,15 +866,17 @@ if __name__ == "__main__":
             saved_df = id_performance.load()
             id_performance.merge_dataframe(saved_df, run_tracker=None)
             id_performance.save()
+
+            if SAVE_TO_DISC:
+                print(f"saving new model! From the Parameter Run:\n"
+                      f"{training_params}")
+                MODEL_PATH = f"data/Coswara_processed/models/448_timesteps{model_save_name}_seed{random_seed}.pth"
+                torch.save(model_weights, MODEL_PATH)
+
         if TRACK_METRICS:
             with open(f"run/tracker_saves/{RUN_NAME}.pickle", "wb") as f:
                 pickle.dump(tracker, f)
 
-        if SAVE_TO_DISC:
-            print(f"saving new model! From the Parameter Run:\n"
-                  f"{training_params}")
-            MODEL_PATH = f"data/Coswara_processed/models/{model_save_name}_seed{random_seed}.pth"
-            torch.save(model_weights, MODEL_PATH)
         # save last iteration of training
         # FINAL_MODEL_PATH = f"data/Coswara_processed/models/{date}_" \
         #                    f"finalepoch_evalMetric_{np.round(eval_metric*100, 1)}.pth"
