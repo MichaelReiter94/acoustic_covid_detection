@@ -1,5 +1,4 @@
 import torch
-
 from audio_recording import AudioRecording
 import os
 import pandas as pd
@@ -29,10 +28,12 @@ transforms_for_metadata = {
 #                          "other_respiratory_illness", "fatigue", "sore_throat", "ischemic_heart_disease", "asthma",
 #                          "other_preexisting_condition", "chronic_lung_disease", "pneumonia",
 #                          "gender", "age", "type_of_covid_test", "vaccination_status"]
+# metadata_for_training = ["smoker", "cold", "hypertension", "diabetes", "cough", "fever", "loss_of_smell",
+#                          "muscle_pain",  "breathing_difficulties", "fatigue", "sore_throat", "asthma", "gender",
+#                          "age", "type_of_covid_test", "vaccination_status"]
 metadata_for_training = ["smoker", "cold", "hypertension", "diabetes", "cough", "fever", "loss_of_smell",
                          "muscle_pain",  "breathing_difficulties", "fatigue", "sore_throat", "asthma", "gender",
-                         "age", "type_of_covid_test", "vaccination_status"]
-
+                         "age", "vaccination_status"]
 
 class Participant:
     def __init__(self, participant_id, types_of_recording, audio_params, augmentations=None):
@@ -106,15 +107,23 @@ class Participant:
     def __repr__(self):
         return f"class: {self.__class__.__name__} | id: {self.id} | label: {self.get_label()}"
 
-    def get_transformed_metadata(self):
+    def get_transformed_metadata(self, mode):
         transformed_metadata = {}
         for item in metadata_for_training:
             if item == "age":
                 transformed_metadata[item] = int(self.meta_data[item]) / 100
+            elif item == "type_of_covid_test":
+                # if mode == "eval" or mode == "test":
+                if True:
+                    transformed_metadata[item] = 0
+                    # if str(self.meta_data[item]) != "nan":
+                    #     print(self.meta_data[item])
+                else:
+                    transformed_metadata[item] = transforms_for_metadata[str(self.meta_data[item])]
             else:
                 transformed_metadata[item] = transforms_for_metadata[str(self.meta_data[item])]
         return transformed_metadata
 
-    def get_transformed_metadata_tensor(self):
-        metadata = self.get_transformed_metadata()
+    def get_transformed_metadata_tensor(self, mode):
+        metadata = self.get_transformed_metadata(mode)
         return torch.Tensor(list(metadata.values()))

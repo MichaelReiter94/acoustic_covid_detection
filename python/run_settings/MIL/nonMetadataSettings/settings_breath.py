@@ -1,9 +1,9 @@
 # ########################################  MIL MIL MIL MIL MIL  #######################################################
 parameters = dict(
-    batch=[6, 12],
-    lr=[1e-6, 3e-6, 1e-5, 3e-5],
-    lr_decay=[0.2],
-    lr_in=[0.2],
+    batch=[10],
+    lr=[1e-5],
+    lr_decay=[1],
+    lr_in=[1],
     wd=[1e-5],
 
     normalize=[True],
@@ -19,12 +19,12 @@ parameters = dict(
     exclude_outliers=[0],
     focal_loss=[0],
 
-    bag_size=[6, 12, 18],
-    lr_mil=[0.25, 1, 3, 10],
-    n_MIL_Neurons=[256],
+    bag_size=[4],
+    lr_mil=[3],
+    n_MIL_Neurons=[64],
 
     exclude_conf_miscl=[True],
-    self_assessment_penalty=[0.85],
+    self_assessment_penalty=[0.6],
     val_oversampl=[1],
     class_weight=[1],
     weighted_sampler=[False],
@@ -37,19 +37,19 @@ parameters = dict(
     resnorm_gamma=[0.85],
     input_resnorm=[True],
     track_stats=[False],
-    dropout_p_MIL=[0.10]
+    dropout_p_MIL=[0.0]
 )
 # ########################################  MIL MIL MIL MIL MIL  #######################################################
 
 USE_MIL = True
 
-RUN_COMMENT = f"metadataMIL_excludedTypeOfTest"
-n_epochs = 3
+RUN_COMMENT = f"MIL_baseline_singleLayer_oneShot_savePerformance"
+n_epochs = 1
 n_cross_validation_runs = 5
 
 SAVE_TO_DISC = False
 EVALUATE_TEST_SET = True
-ID_PERFORMANCE_TRACKING = None
+ID_PERFORMANCE_TRACKING = "noMetadataMIL_v2.pickle"
 
 LOAD_FROM_DISC = False
 # LOAD_FROM_DISC = "2023-06-12_resnet18_23ms_82_7_AUCROC_iter74.pth"

@@ -35,20 +35,23 @@ parameters = dict(
     time_domain_augmentations_neg=[0],
     exclude_exposed=[True],  # no effect, just a reminder to include into the Excel sheet
 
-    use_resnorm=[True, False],
-    resnorm_affine=[True, False],
-    resnorm_gamma=[0.25, 0.75],
-    input_resnorm=[True, False]
+    use_resnorm=[False],
+    resnorm_affine=[True],
+    resnorm_gamma=[0.85],
+    input_resnorm=[True],
+    track_stats=[False],
+    dropout_p_MIL=[0.0]
+
 )
 
 USE_MIL = False
 
-RUN_COMMENT = f"resnorm"
-n_epochs = 150
-n_cross_validation_runs = 2
+RUN_COMMENT = f"resnorm_saveFinalModels"
+n_epochs = 200
+n_cross_validation_runs = 5
 
-SAVE_TO_DISC = False
-EVALUATE_TEST_SET = False
+SAVE_TO_DISC = True
+EVALUATE_TEST_SET = True
 ID_PERFORMANCE_TRACKING = None
 
 LOAD_FROM_DISC = False

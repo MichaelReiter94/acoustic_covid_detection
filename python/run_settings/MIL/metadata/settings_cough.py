@@ -1,7 +1,7 @@
 # ########################################  MIL MIL MIL MIL MIL  #######################################################
 parameters = dict(
-    batch=[6, 12],
-    lr=[1e-6, 3e-6, 1e-5, 3e-5],
+    batch=[12],
+    lr=[1e-5],
     lr_decay=[0.2],
     lr_in=[0.2],
     wd=[1e-5],
@@ -19,8 +19,8 @@ parameters = dict(
     exclude_outliers=[0],
     focal_loss=[0],
 
-    bag_size=[6, 12, 18],
-    lr_mil=[0.25, 1, 3, 10],
+    bag_size=[18],
+    lr_mil=[1],
     n_MIL_Neurons=[256],
 
     exclude_conf_miscl=[True],
@@ -43,14 +43,14 @@ parameters = dict(
 
 USE_MIL = True
 
-RUN_COMMENT = f"metadataMIL_excludedTypeOfTest"
-n_epochs = 3
+RUN_COMMENT = f"metadataMIL_excludedTypeOfTest_saveweights"
+n_epochs = 1
 n_cross_validation_runs = 5
 
 
 SAVE_TO_DISC = False
 EVALUATE_TEST_SET = True
-ID_PERFORMANCE_TRACKING = None
+ID_PERFORMANCE_TRACKING = "correct_metadata.pickle"
 
 LOAD_FROM_DISC = False
 # LOAD_FROM_DISC = "2023-07-06_epoch169_evalMetric_83.8_seed99468865_cough.pth"

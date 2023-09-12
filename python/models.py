@@ -180,11 +180,12 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         self.dropout = dropout
         self.resnet_out_features = resnet_out_features
         self.n_features = n_features
-        n_metadata_categories = 16
+        n_metadata_categories = 15
 
         torch.manual_seed(333666999)
 
         self.feature_layer = nn.Sequential(
+            nn.ReLU(),
             nn.Linear(self.resnet_out_features, self.n_features),
             nn.Dropout(p=self.dropout)
         )
@@ -207,14 +208,24 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         #     # nn.Dropout(p=self.dropout),
         #     nn.Linear(16, 1),
         # )
+        # self.output_layer = nn.Sequential(
+        #     nn.Linear(self.n_features, 1),
+        # )
+
         self.output_layer = nn.Sequential(
-            nn.Linear(self.n_features, 1),
+            nn.Linear(self.n_features + n_metadata_categories, 128),
+            nn.ReLU(),
+            nn.Dropout(p=self.dropout),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Dropout(p=self.dropout),
+            nn.Linear(128, 1)
         )
 
     def forward(self, y, batch_size, bag_size, metadata):
         y = self.feature_layer(y.squeeze())
         # batchsize*bagsize x 512
-
+        # TODO add ReLU??
         A_V = self.attention_V(y)
         A_U = self.attention_U(y)
         attention_coef = self.attention_out(A_V * A_U)  # element wise multiplication
@@ -231,9 +242,10 @@ class FeatureLevelMILExtraFeatureLayer(nn.Module):
         x_combined_bag = x_combined_bag.mean(dim=1)
         # [batch_size x 512]
 
-        # x_combined_bag = torch.cat([x_combined_bag, metadata], dim=1)
+        x_combined_bag = torch.cat([x_combined_bag, metadata], dim=1)
         y_pred = self.output_layer(x_combined_bag)
         # [batch_size x 1]
+
         return y_pred
 
 
@@ -359,7 +371,8 @@ def get_resnet18(dropout_p=0.0, resnorm_settings=None, FREQUNCY_BINS=224, TIMEST
     if resnorm_settings["use_input_resnorm"]:
         my_model.conv1 = nn.Sequential(
             ResidualInstanceNorm2d(num_features=FREQUNCY_BINS, gamma=resnorm_settings["gamma"],
-                                   affine=resnorm_settings["use_affine"], track_running_stats=False,
+                                   affine=resnorm_settings["use_affine"],
+                                   track_running_stats=resnorm_settings["track_stats"],
                                    gamma_is_learnable=False),
             my_model.conv1
         )
@@ -374,6 +387,7 @@ def get_resnet18(dropout_p=0.0, resnorm_settings=None, FREQUNCY_BINS=224, TIMEST
         # a residual normalization layer after the batch norm. such a basic block (for resnet18) has 2 batch norm layers
         # might need changes for resnet50 etc
         layers = [my_model.layer1, my_model.layer2, my_model.layer3, my_model.layer4]
+        # layers = [my_model.layer1, my_model.layer2]
         counter = 0
         for layer in layers:
             for i in range(len(layer)):
@@ -382,7 +396,8 @@ def get_resnet18(dropout_p=0.0, resnorm_settings=None, FREQUNCY_BINS=224, TIMEST
                     # ResidualInstanceNorm2d(num_features=layer[i].conv1.out_channels, gamma=resnorm_settings["gamma"],
                     #                        gamma_is_learnable=False)
                     ResidualInstanceNorm2d(num_features=fdims[counter], gamma=resnorm_settings["gamma"],
-                                           affine=resnorm_settings["use_affine"], track_running_stats=False,
+                                           affine=resnorm_settings["use_affine"],
+                                           track_running_stats=resnorm_settings["track_stats"],
                                            gamma_is_learnable=False)
                     # ResidualBatchNorm2d(num_features=fdims[counter], gamma=resnorm_settings["gamma"],
                     #                     affine=affine=resnorm_settings["use_affine"], track_running_stats=True, gamma_is_learnable=False)
@@ -461,7 +476,8 @@ def get_resnet50(dropout_p=0.0, resnorm_settings=None, FREQUNCY_BINS=224, TIMEST
     if resnorm_settings["use_input_resnorm"]:
         my_model.conv1 = nn.Sequential(
             ResidualInstanceNorm2d(num_features=FREQUNCY_BINS, gamma=resnorm_settings["gamma"],
-                                   affine=resnorm_settings["use_affine"], track_running_stats=False,
+                                   affine=resnorm_settings["use_affine"],
+                                   track_running_stats=resnorm_settings["track_stats"],
                                    gamma_is_learnable=False),
             my_model.conv1
         )
@@ -476,7 +492,8 @@ def get_resnet50(dropout_p=0.0, resnorm_settings=None, FREQUNCY_BINS=224, TIMEST
         # for every major layer (which is hardcoded for resnet18) we iterate over each BasicBlock in this layer and add
         # a residual normalization layer after the batch norm. such a basic block (for resnet18) has 2 batch norm layers
         # might need changes for resnet50 etc
-        layers = [my_model.layer1, my_model.layer2, my_model.layer3, my_model.layer4]
+        # layers = [my_model.layer1, my_model.layer2, my_model.layer3, my_model.layer4]
+        layers = [my_model.layer1, my_model.layer2]
         counter = 0
         for layer in layers:
             for i in range(len(layer)):
@@ -485,7 +502,8 @@ def get_resnet50(dropout_p=0.0, resnorm_settings=None, FREQUNCY_BINS=224, TIMEST
                     # ResidualInstanceNorm2d(num_features=layer[i].conv1.out_channels, gamma=gamma,
                     #                        gamma_is_learnable=True)
                     ResidualInstanceNorm2d(num_features=fdims[counter], gamma=resnorm_settings["gamma"],
-                                           affine=resnorm_settings["use_affine"], track_running_stats=False,
+                                           affine=resnorm_settings["use_affine"],
+                                           track_running_stats=resnorm_settings["track_stats"],
                                            gamma_is_learnable=False)
                     # ResidualBatchNorm2d(num_features=fdims[counter], gamma=gamma,
                     #                     affine=True, track_running_stats=True, gamma_is_learnable=True)
@@ -706,7 +724,7 @@ class Resnet18MILOld(nn.Module):
 
 class ResnetMIL(nn.Module):
     def __init__(self, n_hidden_attention=32, dropout_p=0.0, resnorm_settings=None, F=224, T=224, C=1,
-                 load_from_disc=False, resnet_name=None):
+                 load_from_disc=False, resnet_name=None, dropout_p_MIL=0.0):
         super().__init__()
         if resnet_name == "Resnet18_MIL":
             self.resnet = get_resnet18(dropout_p=dropout_p, resnorm_settings=resnorm_settings,
@@ -725,16 +743,16 @@ class ResnetMIL(nn.Module):
         last_layer = list(self.resnet.children())[-1]
         self.resnet = torch.nn.Sequential(*(list(self.resnet.children())[:-1]))
 
-        # self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
+        # self.mil_net = PredictionLevelMILSingleGatedLayer(n_neurons=n_hidden_attention, dropout=dropout_p_MIL,
         #                                                   last_layer=last_layer,
         #                                                   resnet_out_features=self.fc_layer_neurons)
-        # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p,
+        # self.mil_net = PredictionLevelMILDoubleDenseLayer(n_neurons=n_hidden_attention, dropout=dropout_p_MIL,
         #                                                   last_layer=last_layer,
         #                                                   resnet_out_features=self.fc_layer_neurons)
-        # self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p, last_layer=last_layer,
+        # self.mil_net = FeatureLevelMIL(n_neurons=n_hidden_attention, dropout=dropout_p_MIL, last_layer=last_layer,
         #                                resnet_out_features=self.fc_layer_neurons)
         self.mil_net = FeatureLevelMILExtraFeatureLayer(n_features=n_hidden_attention, n_neurons=n_hidden_attention,
-                                                        dropout=dropout_p, resnet_out_features=self.fc_layer_neurons)
+                                                        dropout=dropout_p_MIL, resnet_out_features=self.fc_layer_neurons)
         self.batch_size, self.bag_size, self.feature_size = None, None, None
 
     def forward(self, x, metadata=None):

@@ -68,7 +68,7 @@ class CustomDataset(Dataset):
         self.bag_size = 1
 
     def evenly_distributed_cyclic_shifts(self, input_matrix, n_output_timesteps, shift_std=0.25):
-        # from a 2D time frequency/quefrency matrix of m time indices create n matrices with fixed "output_size". These
+        # from a 2D time frequency matrix of m time indices create n matrices with fixed "output_size". These
         # matrices are all shifted by 1/n of the total number of time indices
         # TODO implement better:
         # n = np.random.randint(4, 32)
@@ -82,11 +82,8 @@ class CustomDataset(Dataset):
 
         if self.mode == "eval":
             shift_std = 0.0
-
         shifts = [i * delta_shift for i in range(n)]
         shifts += (np.random.randn(n) * shift_std * delta_shift).astype("int")  #
-
-        # print(shifts)
         output_matrices = np.array([np.roll(input_matrix, shift=shift, axis=-1) for shift in shifts])
         output_matrices = output_matrices[:, :, :n_output_timesteps]
         return output_matrices
@@ -184,7 +181,7 @@ class CustomDataset(Dataset):
                 input_features = input_features.expand(-1, 3, -1, -1)
 
         return input_features, torch.tensor(output_label).float(), self.participants[idx].id, \
-               self.participants[idx].get_transformed_metadata_tensor()
+               self.participants[idx].get_transformed_metadata_tensor(mode=self.mode)
 
     def __len__(self):
         return len(self.participants)

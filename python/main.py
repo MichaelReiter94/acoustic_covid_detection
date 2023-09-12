@@ -668,7 +668,8 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
         "use_resnorm": p.use_resnorm,
         "use_affine": p.resnorm_affine,
         "gamma": p.resnorm_gamma,
-        "use_input_resnorm": p.input_resnorm
+        "use_input_resnorm": p.input_resnorm,
+        "track_stats": p.track_stats
     }
 
 
@@ -678,7 +679,8 @@ def get_model(model_name, params, verbose=True, load_from_disc=False):
         _, _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](n_hidden_attention=params.n_MIL_Neurons, dropout_p=p.dropout_p,
                                           F=F, T=T, resnorm_settings=resnorm_settings,
-                                          load_from_disc=load_from_disc, resnet_name=model_name).to(device)
+                                          load_from_disc=load_from_disc, resnet_name=model_name,
+                                          dropout_p_MIL=p.dropout_p_MIL).to(device)
     elif model_name == "resnet18" or model_name == "resnet50":
         _, F, T = train_set.get_input_shape()
         my_model = model_dict[model_name](dropout_p=p.dropout_p, FREQUNCY_BINS=F, TIMESTEPS=T,

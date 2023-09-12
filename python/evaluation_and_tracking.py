@@ -457,7 +457,9 @@ class IntraEpochMetricsTracker:
         self.full_metric_performance_df = self.get_metric_performance_df(include=("std", "params"),
                                                                          remove_columns=("fnr", "fpr"))
         self.compact_metric_performance_df = self.get_metric_performance_df(include="params",
-                                                                            remove_columns=("fnr", "fpr", "tpr_at_95"))
+                                                                            # remove_columns=("fnr", "fpr", "tpr_at_95")
+                                                                            remove_columns=("fnr", "fpr")
+                                                                            )
 
         self.metrics_used = list(self.crossval_runs[0].runs[0].metrics["eval"].keys())
         self.n_epochs = len(self.crossval_runs[0].runs[0].metrics["train"]["loss"])
